@@ -1,3 +1,5 @@
+%define enable_slp 1
+
 Name:           libdrm
 Version:        2.4.39
 Release:        4
