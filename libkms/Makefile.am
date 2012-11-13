@@ -19,6 +19,11 @@ libkms_la_SOURCES = \
 	dumb.c \
 	api.c
 
+if HAVE_SLP
+libkms_la_SOURCES += slp.c
+AM_CFLAGS += -I$(top_srcdir)/exynos
+endif
+
 if HAVE_VMWGFX
 libkms_la_SOURCES += vmwgfx.c
 endif

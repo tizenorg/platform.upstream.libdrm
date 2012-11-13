@@ -1,0 +1,11 @@
+--- configure.ac
++++ configure.ac
+@@ -228,7 +242,7 @@
+ fi
+ AM_CONDITIONAL(HAVE_LIBUDEV, [test "x$HAVE_LIBUDEV" = xyes])
+ 
+-if test "x$INTEL" != "xno" -o "x$RADEON" != "xno" -o "x$NOUVEAU" != "xno"; then
++if test "x$INTEL" != "xno" -o "x$RADEON" != "xno" -o "x$NOUVEAU" != "xno" -o "x$SLP" != "xno"; then
+     # Check for atomic intrinsics
+     AC_CACHE_CHECK([for native atomic primitives], drm_cv_atomic_primitives,
+     [
