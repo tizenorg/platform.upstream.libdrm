@@ -117,6 +117,8 @@ make %{?_smp_mflags}
 %manifest libdrm.manifest
 %{_libdir}/libkms.so.*
 
+%ifnarch %arm
 %files intel
 %manifest libdrm.manifest
 %{_libdir}/libdrm_intel.so.*
+%endif
