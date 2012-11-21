@@ -101,7 +101,9 @@ make %{?_smp_mflags}
 %if 0%{?enable_slp}
 %{_libdir}/libdrm_slp.so
 %endif
+%ifarch i586 i686 %ix86 x86_64
 %{_libdir}/libdrm_intel.so
+%endif
 %{_libdir}/libkms.so
 %{_libdir}/libdrm_exynos.so
 %{_libdir}/pkgconfig/*
@@ -117,7 +119,7 @@ make %{?_smp_mflags}
 %manifest libdrm.manifest
 %{_libdir}/libkms.so.*
 
-%ifnarch %arm
+%ifarch i586 i686 %ix86 x86_64
 %files intel
 %manifest libdrm.manifest
 %{_libdir}/libdrm_intel.so.*
