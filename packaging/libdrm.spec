@@ -19,7 +19,9 @@ Summary:        Userspace interface to kernel DRM services
 Group:          Development/Libraries
 Requires:       kernel-headers
 Requires:       libdrm
+%ifnarch %{arm}
 Requires:       libdrm-intel
+%endif
 %if 0%{?enable_slp}
 Requires:       libdrm-slp
 %endif
