@@ -1,9 +1,10 @@
 Name:           libdrm
-Version:        2.4.39
+Version:        2.4.42
 Release:        4
 License:        MIT
+Url:            http://cgit.freedesktop.org/mesa/drm
 Summary:        Userspace interface to kernel DRM services
-Group:          System/Libraries
+Group:          Graphics/Libraries
 Source0:        %{name}-%{version}.tar.bz2
 Source1001:     libdrm.manifest
 BuildRequires:  kernel-headers
@@ -12,7 +13,7 @@ BuildRequires:  pkgconfig(pthread-stubs)
 BuildRequires:  pkgconfig(xorg-macros)
 
 %description
-Description: %{summary}
+Direct Rendering Manager headers and kernel modules.
 
 %package devel
 Summary:        Userspace interface to kernel DRM services
@@ -28,14 +29,17 @@ Requires:       libdrm-slp
 Requires:       libkms
 
 %description devel
-Userspace interface to kernel DRM services
+Direct Rendering Manager headers and kernel modules.
+
+Development related files.
+
 %if 0%{?enable_slp}
 %package slp
 Summary:        Userspace interface to slp-specific kernel DRM services
 Group:          Development/Libraries
 
 %description slp
-Userspace interface to slp-specific kernel DRM services
+Userspace interface to slp-specific kernel DRM services.
 %endif
 
 %package -n libkms
