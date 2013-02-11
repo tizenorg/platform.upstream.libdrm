@@ -1,3 +1,6 @@
+* Mon Feb 11 2013 Anas Nashif <anas.nashif@intel.com> submit/trunk/20130211.160627@4aa3f86
+- readd baselibs.conf
+
 * Mon Feb 11 2013 Anas Nashif <anas.nashif@intel.com> libdrm-2.4.42@ade64c1
 - Update to 2.4.42
 
