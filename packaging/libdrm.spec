@@ -36,7 +36,7 @@ Development related files.
 %if 0%{?enable_slp}
 %package slp
 Summary:        Userspace interface to slp-specific kernel DRM services
-Group:          Development/Libraries
+Group:          Graphics/Libraries
 
 %description slp
 Userspace interface to slp-specific kernel DRM services.
@@ -44,14 +44,14 @@ Userspace interface to slp-specific kernel DRM services.
 
 %package -n libkms
 Summary:        Userspace interface to kernel DRM buffer management
-Group:          Development/Libraries
+Group:          Graphics/Libraries
 
 %description -n libkms
 Userspace interface to kernel DRM buffer management
 
 %package intel
 Summary:        Userspace interface to intel graphics kernel DRM buffer management
-Group:          Development/Libraries
+Group:          Graphics/Libraries
 
 %description intel
 Userspace interface to intel graphics kernel DRM buffer management
