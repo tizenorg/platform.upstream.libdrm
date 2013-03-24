@@ -23,24 +23,12 @@ Requires:       libdrm
 %ifnarch %{arm}
 Requires:       libdrm-intel
 %endif
-%if 0%{?enable_slp}
-Requires:       libdrm-slp
-%endif
 Requires:       libkms
 
 %description devel
 Direct Rendering Manager headers and kernel modules.
 
 Development related files.
-
-%if 0%{?enable_slp}
-%package slp
-Summary:        Userspace interface to slp-specific kernel DRM services
-Group:          Graphics/Libraries
-
-%description slp
-Userspace interface to slp-specific kernel DRM services.
-%endif
 
 %package -n libkms
 Summary:        Userspace interface to kernel DRM buffer management
@@ -81,12 +69,6 @@ make %{?_smp_mflags}
 
 %postun -p /sbin/ldconfig
 
-%if 0%{?enable_slp}
-%post slp -p /sbin/ldconfig
-
-%postun slp  -p /sbin/ldconfig
-%endif
-
 %post -n libkms -p /sbin/ldconfig
 
 %postun -n libkms -p /sbin/ldconfig
@@ -104,9 +86,6 @@ make %{?_smp_mflags}
 %manifest libdrm.manifest
 %{_includedir}/*
 %{_libdir}/libdrm.so
-%if 0%{?enable_slp}
-%{_libdir}/libdrm_slp.so
-%endif
 %ifarch i586 i686 %ix86 x86_64
 %{_libdir}/libdrm_intel.so
 %endif
@@ -115,11 +94,6 @@ make %{?_smp_mflags}
 %{_libdir}/pkgconfig/*
 
 
-%if 0%{?enable_slp}
-%files slp
-%manifest libdrm.manifest
-%{_libdir}/libdrm_slp*.so.*
-%endif
 
 %files -n libkms
 %manifest libdrm.manifest
