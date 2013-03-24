@@ -1,3 +1,6 @@
+* Sun Mar 24 2013 Anas Nashif <anas.nashif@intel.com> libdrm-2.4.42@d72da55
+- Do not build slp module
+
 * Mon Mar 18 2013 Anas Nashif <anas.nashif@intel.com> submit/trunk/20130211.161736@3627b63
 - Fixed package groups
 
