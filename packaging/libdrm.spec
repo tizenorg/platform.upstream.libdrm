@@ -4,7 +4,7 @@ Release:        4
 License:        MIT
 Url:            http://cgit.freedesktop.org/mesa/drm
 Summary:        Userspace interface to kernel DRM services
-Group:          Graphics/Libraries
+Group:          Graphics & UI Framework/Libraries
 Source0:        %{name}-%{version}.tar.bz2
 Source1001:     libdrm.manifest
 BuildRequires:  kernel-headers
@@ -17,13 +17,12 @@ Direct Rendering Manager headers and kernel modules.
 
 %package devel
 Summary:        Userspace interface to kernel DRM services
-Group:          Development/Libraries
 Requires:       kernel-headers
-Requires:       libdrm
+Requires:       libdrm = %{version}
 %ifnarch %{arm}
-Requires:       libdrm-intel
+Requires:       libdrm-intel = %{version}
 %endif
-Requires:       libkms
+Requires:       libkms = %{version}
 
 %description devel
 Direct Rendering Manager headers and kernel modules.
@@ -32,14 +31,12 @@ Development related files.
 
 %package -n libkms
 Summary:        Userspace interface to kernel DRM buffer management
-Group:          Graphics/Libraries
 
 %description -n libkms
 Userspace interface to kernel DRM buffer management
 
 %package intel
 Summary:        Userspace interface to intel graphics kernel DRM buffer management
-Group:          Graphics/Libraries
 
 %description intel
 Userspace interface to intel graphics kernel DRM buffer management
@@ -51,13 +48,13 @@ Userspace interface to intel graphics kernel DRM buffer management
 %build
 cp %{SOURCE1001} .
 %reconfigure \
-             	--enable-static=yes  \
-		--enable-udev \
-		--enable-libkms \
-             	--disable-nouveau-experimental-api \
-		--disable-radeon \
-		--disable-nouveau \
-	     	--enable-exynos-experimental-api
+        --enable-static=yes  \
+        --enable-udev \
+        --enable-libkms \
+        --disable-nouveau-experimental-api \
+        --disable-radeon \
+        --disable-nouveau \
+        --enable-exynos-experimental-api
 
 make %{?_smp_mflags}
 
@@ -84,7 +81,13 @@ make %{?_smp_mflags}
 
 %files devel
 %manifest libdrm.manifest
-%{_includedir}/*
+%dir %{_includedir}/libdrm
+%{_includedir}/libdrm/*.h
+%dir %{_includedir}/libkms
+%{_includedir}/libkms/*.h
+%dir %{_includedir}/exynos
+%{_includedir}/exynos/*.h
+%{_includedir}/*.h
 %{_libdir}/libdrm.so
 %ifarch i586 i686 %ix86 x86_64
 %{_libdir}/libdrm_intel.so
@@ -92,7 +95,6 @@ make %{?_smp_mflags}
 %{_libdir}/libkms.so
 %{_libdir}/libdrm_exynos.so
 %{_libdir}/pkgconfig/*
-
 
 
 %files -n libkms
