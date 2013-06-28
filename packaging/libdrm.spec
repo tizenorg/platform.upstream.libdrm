@@ -75,12 +75,12 @@ make %{?_smp_mflags}
 %postun intel -p /sbin/ldconfig
 
 %files
-%manifest libdrm.manifest
+%manifest %{name}.manifest
 %{_libdir}/libdrm.so.*
 %{_libdir}/libdrm_exynos.so.*
 
 %files devel
-%manifest libdrm.manifest
+%manifest %{name}.manifest
 %dir %{_includedir}/libdrm
 %{_includedir}/libdrm/*.h
 %dir %{_includedir}/libkms
@@ -98,11 +98,11 @@ make %{?_smp_mflags}
 
 
 %files -n libkms
-%manifest libdrm.manifest
+%manifest %{name}.manifest
 %{_libdir}/libkms.so.*
 
 %ifarch i586 i686 %ix86 x86_64
 %files intel
-%manifest libdrm.manifest
+%manifest %{name}.manifest
 %{_libdir}/libdrm_intel.so.*
 %endif
