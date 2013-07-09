@@ -1,5 +1,5 @@
 Name:           libdrm
-Version:        2.4.42
+Version:        2.4.45
 Release:        4
 License:        MIT
 Url:            http://cgit.freedesktop.org/mesa/drm
