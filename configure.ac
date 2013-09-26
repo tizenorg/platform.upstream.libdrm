@@ -98,6 +98,11 @@ AC_ARG_ENABLE(freedreno-experimental-api,
 	      [Enable support for freedreno's experimental API (default: disabled)]),
 	      [FREEDRENO=$enableval], [FREEDRENO=no])
 
+AC_ARG_ENABLE(vigs,
+	     AS_HELP_STRING([--disable-vigs],
+	     [Enable support for VIGS's API (default: enabled)]),
+	     [VIGS=$enableval], [VIGS=yes])
+
 AC_ARG_ENABLE(install-test-programs,
 		  AS_HELP_STRING([--enable-install-test-programs],
 		  [Install test programs (default: no)]),
@@ -267,7 +272,7 @@ else
 fi
 AM_CONDITIONAL([HAVE_MANPAGES_STYLESHEET], [test "x$HAVE_MANPAGES_STYLESHEET" = "xyes"])
 
-if test "x$INTEL" != "xno" -o "x$RADEON" != "xno" -o "x$NOUVEAU" != "xno" -o "x$OMAP" != "xno" -o "x$FREEDRENO" != "xno"; then
+if test "x$INTEL" != "xno" -o "x$RADEON" != "xno" -o "x$NOUVEAU" != "xno" -o "x$OMAP" != "xno" -o "x$FREEDRENO" != "xno" "x$VIGS" != "xno"; then
     # Check for atomic intrinsics
     AC_CACHE_CHECK([for native atomic primitives], drm_cv_atomic_primitives,
     [
@@ -339,6 +344,10 @@ if test "x$INTEL" != "xno" -o "x$RADEON" != "xno" -o "x$NOUVEAU" != "xno" -o "x$
     fi
 fi
 
+if test "x$VIGS" != "xno"; then
+	AC_DEFINE(HAVE_VIGS, 1, [Have VIGS])
+fi
+
 if test "x$INTEL" != "xno"; then
 	PKG_CHECK_MODULES(PCIACCESS, [pciaccess >= 0.10])
 fi
@@ -356,6 +365,7 @@ AM_CONDITIONAL(HAVE_NOUVEAU, [test "x$NOUVEAU" != "xno"])
 if test "x$RADEON" = xyes; then
 	AC_DEFINE(HAVE_RADEON, 1, [Have radeon support])
 fi
+AM_CONDITIONAL(HAVE_VIGS, [test "x$VIGS" != "xno"])
 
 AC_ARG_WITH([kernel-source],
             [AS_HELP_STRING([--with-kernel-source],
@@ -380,6 +390,8 @@ AC_CONFIG_FILES([
 	exynos/libdrm_exynos.pc
 	freedreno/Makefile
 	freedreno/libdrm_freedreno.pc
+	vigs/Makefile
+	vigs/libdrm_vigs.pc
 	tests/Makefile
 	tests/modeprint/Makefile
 	tests/modetest/Makefile
@@ -404,4 +416,5 @@ echo "  Nouveau API    $NOUVEAU"
 echo "  OMAP API       $OMAP"
 echo "  EXYNOS API     $EXYNOS"
 echo "  Freedreno API  $FREEDRENO"
+echo "  VIGS API       $VIGS"
 echo ""

@@ -78,6 +78,7 @@ make %{?_smp_mflags}
 %manifest %{name}.manifest
 %{_libdir}/libdrm.so.*
 %{_libdir}/libdrm_exynos.so.*
+%{_libdir}/libdrm_vigs.so.*
 
 %files devel
 %manifest %{name}.manifest
@@ -94,6 +95,7 @@ make %{?_smp_mflags}
 %endif
 %{_libdir}/libkms.so
 %{_libdir}/libdrm_exynos.so
+%{_libdir}/libdrm_vigs.so
 %{_libdir}/pkgconfig/*
 
 
