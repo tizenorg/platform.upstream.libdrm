@@ -10,7 +10,6 @@ Source1001:     libdrm.manifest
 BuildRequires:  kernel-headers
 BuildRequires:  pkgconfig(pciaccess)
 BuildRequires:  pkgconfig(pthread-stubs)
-BuildRequires:  pkgconfig(xorg-macros)
 
 %description
 Direct Rendering Manager headers and kernel modules.
