@@ -73,6 +73,13 @@ struct vigs_drm_execbuffer_impl
     struct vigs_drm_execbuffer base;
 };
 
+struct vigs_drm_fence_impl
+{
+    struct vigs_drm_fence base;
+
+    atomic_t ref_count;
+};
+
 static void vigs_drm_gem_close(struct vigs_drm_device *dev, uint32_t handle)
 {
     struct drm_gem_close req =
@@ -255,6 +262,23 @@ void vigs_drm_gem_unmap(struct vigs_drm_gem *gem)
 
     munmap(gem->vaddr, gem->size);
     gem->vaddr = NULL;
+}
+
+int vigs_drm_gem_wait(struct vigs_drm_gem *gem)
+{
+    struct drm_vigs_gem_wait req =
+    {
+        .handle = gem->handle,
+    };
+    int ret;
+
+    ret = drmIoctl(gem->dev->fd, DRM_IOCTL_VIGS_GEM_WAIT, &req);
+
+    if (ret != 0) {
+        return -errno;
+    }
+
+    return 0;
 }
 
 int vigs_drm_surface_create(struct vigs_drm_device *dev,
@@ -513,4 +537,119 @@ int vigs_drm_execbuffer_exec(struct vigs_drm_execbuffer *execbuffer)
     ret = drmIoctl(execbuffer->gem.dev->fd, DRM_IOCTL_VIGS_EXEC, &req);
 
     return (ret != 0) ? -errno : 0;
+}
+
+int vigs_drm_fence_create(struct vigs_drm_device *dev,
+                          int send,
+                          struct vigs_drm_fence **fence)
+{
+    struct vigs_drm_fence_impl *fence_impl;
+    struct drm_vigs_create_fence req =
+    {
+        .send = send
+    };
+    int ret;
+
+    fence_impl = calloc(sizeof(*fence_impl), 1);
+
+    if (!fence_impl) {
+        ret = -ENOMEM;
+        goto fail1;
+    }
+
+    ret = drmIoctl(dev->fd, DRM_IOCTL_VIGS_CREATE_FENCE, &req);
+
+    if (ret != 0) {
+        ret = -errno;
+        goto fail2;
+    }
+
+    atomic_set(&fence_impl->ref_count, 1);
+    fence_impl->base.dev = dev;
+    fence_impl->base.handle = req.handle;
+    fence_impl->base.seq = req.seq;
+    fence_impl->base.signaled = 0;
+
+    *fence = &fence_impl->base;
+
+    return 0;
+
+fail2:
+    free(fence_impl);
+fail1:
+    *fence = NULL;
+
+    return ret;
+}
+
+void vigs_drm_fence_ref(struct vigs_drm_fence *fence)
+{
+    struct vigs_drm_fence_impl *fence_impl;
+
+    if (!fence) {
+        return;
+    }
+
+    fence_impl = vigs_containerof(fence, struct vigs_drm_fence_impl, base);
+
+    atomic_inc(&fence_impl->ref_count);
+}
+
+void vigs_drm_fence_unref(struct vigs_drm_fence *fence)
+{
+    struct vigs_drm_fence_impl *fence_impl;
+    struct drm_vigs_fence_unref req;
+
+    if (!fence) {
+        return;
+    }
+
+    fence_impl = vigs_containerof(fence, struct vigs_drm_fence_impl, base);
+
+    assert(atomic_read(&fence_impl->ref_count) > 0);
+    if (!atomic_dec_and_test(&fence_impl->ref_count)) {
+        return;
+    }
+
+    req.handle = fence->handle;
+
+    drmIoctl(fence->dev->fd, DRM_IOCTL_VIGS_FENCE_UNREF, &req);
+
+    free(fence_impl);
+}
+
+int vigs_drm_fence_wait(struct vigs_drm_fence *fence)
+{
+    struct drm_vigs_fence_wait req =
+    {
+        .handle = fence->handle
+    };
+    int ret;
+
+    ret = drmIoctl(fence->dev->fd, DRM_IOCTL_VIGS_FENCE_WAIT, &req);
+
+    return (ret != 0) ? -errno : 0;
+}
+
+int vigs_drm_fence_check(struct vigs_drm_fence *fence)
+{
+    struct drm_vigs_fence_signaled req =
+    {
+        .handle = fence->handle
+    };
+    int ret;
+
+    if (fence->signaled) {
+        return 0;
+    }
+
+    ret = drmIoctl(fence->dev->fd, DRM_IOCTL_VIGS_FENCE_SIGNALED, &req);
+
+    if (ret != 0) {
+        return -errno;
+    }
+
+    fence->signaled = req.signaled;
+
+    return 0;
 }
