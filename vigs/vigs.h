@@ -89,6 +89,21 @@ struct vigs_drm_execbuffer
     struct vigs_drm_gem gem;
 };
 
+struct vigs_drm_fence
+{
+    /* VIGS device object. */
+    struct vigs_drm_device *dev;
+
+    /* a handle to fence object. */
+    uint32_t handle;
+
+    /* fence sequence number. */
+    uint32_t seq;
+
+    /* is fence signaled ? updated on 'vigs_drm_fence_check'. */
+    int signaled;
+};
+
 /*
  * All functions return 0 on success and < 0 on error, i.e. kernel style:
  * return -ENOMEM;
@@ -133,6 +148,8 @@ int vigs_drm_gem_get_name(struct vigs_drm_gem *gem);
 int vigs_drm_gem_map(struct vigs_drm_gem *gem, int track_access);
 
 void vigs_drm_gem_unmap(struct vigs_drm_gem *gem);
+
+int vigs_drm_gem_wait(struct vigs_drm_gem *gem);
 
 /*
  * @}
@@ -180,6 +197,33 @@ int vigs_drm_execbuffer_open(struct vigs_drm_device *dev,
                              struct vigs_drm_execbuffer **execbuffer);
 
 int vigs_drm_execbuffer_exec(struct vigs_drm_execbuffer *execbuffer);
+
+/*
+ * @}
+ */
+
+/*
+ * Fence functions.
+ * @{
+ */
+
+int vigs_drm_fence_create(struct vigs_drm_device *dev,
+                          int send,
+                          struct vigs_drm_fence **fence);
+
+/*
+ * Passing NULL won't hurt, this is for convenience.
+ */
+void vigs_drm_fence_ref(struct vigs_drm_fence *fence);
+
+/*
+ * Passing NULL won't hurt, this is for convenience.
+ */
+void vigs_drm_fence_unref(struct vigs_drm_fence *fence);
+
+int vigs_drm_fence_wait(struct vigs_drm_fence *fence);
+
+int vigs_drm_fence_check(struct vigs_drm_fence *fence);
 
 /*
  * @}
