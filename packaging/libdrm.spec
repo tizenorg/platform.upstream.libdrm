@@ -1,6 +1,6 @@
 Name:           libdrm
-Version:        2.4.45
-Release:        4
+Version:        2.4.52
+Release:        1
 License:        MIT
 Url:            http://cgit.freedesktop.org/mesa/drm
 Summary:        Userspace interface to kernel DRM services
