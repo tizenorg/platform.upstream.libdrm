@@ -33,7 +33,7 @@
 /*
  * Bump this whenever driver interface changes.
  */
-#define DRM_VIGS_DRIVER_VERSION 10
+#define DRM_VIGS_DRIVER_VERSION 11
 
 /*
  * Surface access flags.
@@ -53,6 +53,7 @@ struct drm_vigs_create_surface
     uint32_t height;
     uint32_t stride;
     uint32_t format;
+    int scanout;
     uint32_t handle;
     uint32_t size;
     uint32_t id;
@@ -83,6 +84,7 @@ struct drm_vigs_surface_info
     uint32_t height;
     uint32_t stride;
     uint32_t format;
+    int scanout;
     uint32_t size;
     uint32_t id;
 };
