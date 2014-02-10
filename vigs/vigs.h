@@ -81,6 +81,7 @@ struct vigs_drm_surface
     uint32_t height;
     uint32_t stride;
     uint32_t format;
+    int scanout;
     uint32_t id;
 };
 
@@ -165,6 +166,7 @@ int vigs_drm_surface_create(struct vigs_drm_device *dev,
                             uint32_t height,
                             uint32_t stride,
                             uint32_t format,
+                            int scanout,
                             struct vigs_drm_surface **sfc);
 
 int vigs_drm_surface_open(struct vigs_drm_device *dev,
