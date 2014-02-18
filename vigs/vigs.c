@@ -657,3 +657,19 @@ int vigs_drm_fence_check(struct vigs_drm_fence *fence)
 
     return 0;
 }
+
+int vigs_drm_plane_set_zpos(struct vigs_drm_device *dev,
+                            uint32_t plane_id,
+                            int zpos)
+{
+    struct drm_vigs_plane_set_zpos req =
+    {
+        .plane_id = plane_id,
+        .zpos = zpos
+    };
+    int ret;
+
+    ret = drmIoctl(dev->fd, DRM_IOCTL_VIGS_PLANE_SET_ZPOS, &req);
+
+    return (ret != 0) ? -errno : 0;
+}
