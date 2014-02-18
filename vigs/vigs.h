@@ -231,6 +231,19 @@ int vigs_drm_fence_check(struct vigs_drm_fence *fence);
  * @}
  */
 
+/*
+ * Plane functions.
+ * @{
+ */
+
+int vigs_drm_plane_set_zpos(struct vigs_drm_device *dev,
+                            uint32_t plane_id,
+                            int zpos);
+
+/*
+ * @}
+ */
+
 #ifdef __cplusplus
 };
 #endif /* __cplusplus */
