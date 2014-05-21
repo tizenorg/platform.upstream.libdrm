@@ -18,7 +18,7 @@ Direct Rendering Manager headers and kernel modules.
 Summary:        Userspace interface to kernel DRM services
 Requires:       kernel-headers
 Requires:       libdrm = %{version}
-%ifnarch %{arm}
+%ifarch i586 i686 %ix86 x86_64
 Requires:       libdrm-intel = %{version}
 %endif
 Requires:       libkms = %{version}
