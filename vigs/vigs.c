@@ -673,3 +673,131 @@ int vigs_drm_plane_set_zpos(struct vigs_drm_device *dev,
 
     return (ret != 0) ? -errno : 0;
 }
+
+int vigs_drm_dp_surface_create(struct vigs_drm_device *dev,
+                               uint32_t dp_plane,
+                               uint32_t dp_fb_buf,
+                               uint32_t dp_mem_flag,
+                               uint32_t width,
+                               uint32_t height,
+                               uint32_t stride,
+                               uint32_t format,
+                               struct vigs_drm_surface **sfc)
+{
+    struct vigs_drm_surface_impl *sfc_impl;
+    struct drm_vigs_dp_create_surface req =
+    {
+        .dp_plane = dp_plane,
+        .dp_fb_buf = dp_fb_buf,
+        .dp_mem_flag = dp_mem_flag,
+        .width = width,
+        .height = height,
+        .stride = stride,
+        .format = format,
+    };
+    int ret;
+
+    sfc_impl = calloc(sizeof(*sfc_impl), 1);
+
+    if (!sfc_impl) {
+        ret = -ENOMEM;
+        goto fail1;
+    }
+
+    ret = drmIoctl(dev->fd, DRM_IOCTL_VIGS_DP_CREATE_SURFACE, &req);
+
+    if (ret != 0) {
+        ret = -errno;
+        goto fail2;
+    }
+
+    vigs_drm_gem_impl_init((struct vigs_drm_gem_impl*)sfc_impl,
+                           dev,
+                           req.handle,
+                           req.size,
+                           0);
+
+    sfc_impl->base.width = width;
+    sfc_impl->base.height = height;
+    sfc_impl->base.stride = stride;
+    sfc_impl->base.format = format;
+    sfc_impl->base.scanout = 0;
+    sfc_impl->base.id = req.id;
+
+    *sfc = &sfc_impl->base;
+
+    return 0;
+
+fail2:
+    free(sfc_impl);
+fail1:
+    *sfc = NULL;
+
+    return ret;
+}
+
+int vigs_drm_dp_surface_open(struct vigs_drm_device *dev,
+                             uint32_t dp_plane,
+                             uint32_t dp_fb_buf,
+                             uint32_t dp_mem_flag,
+                             struct vigs_drm_surface **sfc)
+{
+    struct vigs_drm_surface_impl *sfc_impl;
+    struct drm_vigs_dp_open_surface req =
+    {
+        .dp_plane = dp_plane,
+        .dp_fb_buf = dp_fb_buf,
+        .dp_mem_flag = dp_mem_flag
+    };
+    struct drm_vigs_surface_info info_req;
+    int ret;
+
+    sfc_impl = calloc(sizeof(*sfc_impl), 1);
+
+    if (!sfc_impl) {
+        ret = -ENOMEM;
+        goto fail1;
+    }
+
+    ret = drmIoctl(dev->fd, DRM_IOCTL_VIGS_DP_OPEN_SURFACE, &req);
+
+    if (ret != 0) {
+        ret = -errno;
+        goto fail2;
+    }
+
+    info_req.handle = req.handle;
+
+    ret = drmIoctl(dev->fd, DRM_IOCTL_VIGS_SURFACE_INFO, &info_req);
+
+    if (ret != 0) {
+        ret = -errno;
+        goto fail3;
+    }
+
+    vigs_drm_gem_impl_init((struct vigs_drm_gem_impl*)sfc_impl,
+                           dev,
+                           req.handle,
+                           info_req.size,
+                           0);
+
+    sfc_impl->base.width = info_req.width;
+    sfc_impl->base.height = info_req.height;
+    sfc_impl->base.stride = info_req.stride;
+    sfc_impl->base.format = info_req.format;
+    sfc_impl->base.scanout = info_req.scanout;
+    sfc_impl->base.id = info_req.id;
+
+    *sfc = &sfc_impl->base;
+
+    return 0;
+
+fail3:
+    vigs_drm_gem_close(dev, req.handle);
+fail2:
+    free(sfc_impl);
+fail1:
+    *sfc = NULL;
+
+    return ret;
+}
