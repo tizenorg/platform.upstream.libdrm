@@ -14,6 +14,15 @@ BuildRequires:  pkgconfig(pthread-stubs)
 %description
 Direct Rendering Manager headers and kernel modules.
 
+%package tools
+Summary:	Diagnostic utilities for DRI and DRM
+Group:          Graphics & UI Framework/Utilities
+Obsoletes:      libdrm < %version-%release
+Provides:       libdrm = %version-%release
+
+%description tools
+Diagnoistic tools to run a test for DRI and DRM
+
 %package devel
 Summary:        Userspace interface to kernel DRM services
 Requires:       kernel-headers
@@ -56,10 +65,18 @@ cp %{SOURCE1001} .
         --enable-exynos-experimental-api
 
 make %{?_smp_mflags}
+make %{?_smp_mflags} -C tests dristat drmstat
 
 %install
 %make_install
-
+make -C tests/modeprint install DESTDIR=$RPM_BUILD_ROOT
+make -C tests/modetest install DESTDIR=$RPM_BUILD_ROOT
+%{__mkdir} -p $RPM_BUILD_ROOT/usr/bin
+%{__install}  \
+	tests/.libs/dristat \
+        tests/.libs/drmstat \
+	tests/modeprint/.libs/modeprint \
+	tests/modetest/.libs/modetest $RPM_BUILD_ROOT/usr/bin
 
 %post -p /sbin/ldconfig
 
@@ -78,6 +95,13 @@ make %{?_smp_mflags}
 %{_libdir}/libdrm.so.*
 %{_libdir}/libdrm_exynos.so.*
 %{_libdir}/libdrm_vigs.so.*
+
+%files tools
+%manifest %{name}.manifest
+%_bindir/dristat
+%_bindir/drmstat
+%_bindir/modeprint
+%_bindir/modetest
 
 %files devel
 %manifest %{name}.manifest
