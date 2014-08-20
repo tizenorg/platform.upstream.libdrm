@@ -275,6 +275,11 @@ enum drm_exynos_ipp_cmd {
 	IPP_CMD_MAX,
 };
 
+enum drm_exynos_color_range {
+	COLOR_RANGE_LIMITED,
+	COLOR_RANGE_FULL,
+};
+
 /**
  * A structure for ipp property.
  *
@@ -290,6 +295,7 @@ struct drm_exynos_ipp_property {
 	__u32	ipp_id;
 	__u32	prop_id;
 	__u32	refresh_rate;
+	__u32	range;
 };
 
 /* definition of buffer */
