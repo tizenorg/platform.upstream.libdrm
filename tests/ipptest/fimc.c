@@ -75,6 +75,7 @@ static int exynos_drm_ipp_set_property(int fd,
 		}
 		property->config[EXYNOS_DRM_OPS_DST].pos = scale_pos;
 		property->config[EXYNOS_DRM_OPS_DST].sz = dst_sz;
+		property->range = COLOR_RANGE_FULL;	/* Wide default */
 		break;
 	case IPP_CMD_WB:
 		property->config[EXYNOS_DRM_OPS_SRC].ops_id = EXYNOS_DRM_OPS_SRC;
@@ -104,6 +105,7 @@ static int exynos_drm_ipp_set_property(int fd,
 		}
 		property->config[EXYNOS_DRM_OPS_DST].pos = scale_pos;
 		property->config[EXYNOS_DRM_OPS_DST].sz = dst_sz;
+		property->range = COLOR_RANGE_FULL;	/* Wide default */
 		break;
 	case IPP_CMD_OUTPUT:
 	default:
