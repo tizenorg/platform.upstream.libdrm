@@ -244,6 +244,31 @@ int vigs_drm_plane_set_zpos(struct vigs_drm_device *dev,
  * @}
  */
 
+/*
+ * DP functions.
+ * @{
+ */
+
+int vigs_drm_dp_surface_create(struct vigs_drm_device *dev,
+                               uint32_t dp_plane,
+                               uint32_t dp_fb_buf,
+                               uint32_t dp_mem_flag,
+                               uint32_t width,
+                               uint32_t height,
+                               uint32_t stride,
+                               uint32_t format,
+                               struct vigs_drm_surface **sfc);
+
+int vigs_drm_dp_surface_open(struct vigs_drm_device *dev,
+                             uint32_t dp_plane,
+                             uint32_t dp_fb_buf,
+                             uint32_t dp_mem_flag,
+                             struct vigs_drm_surface **sfc);
+
+/*
+ * @}
+ */
+
 #ifdef __cplusplus
 };
 #endif /* __cplusplus */
