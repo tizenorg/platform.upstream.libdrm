@@ -33,7 +33,7 @@
 /*
  * Bump this whenever driver interface changes.
  */
-#define DRM_VIGS_DRIVER_VERSION 13
+#define DRM_VIGS_DRIVER_VERSION 14
 
 /*
  * Surface access flags.
@@ -151,6 +151,14 @@ struct drm_vigs_plane_set_zpos
     int zpos;
 };
 
+struct drm_vigs_plane_set_transform
+{
+    uint32_t plane_id;
+    int hflip;
+    int vflip;
+    int rotation;
+};
+
 struct drm_vigs_dp_create_surface
 {
     uint32_t dp_plane;
@@ -188,6 +196,7 @@ struct drm_vigs_dp_open_surface
 #define DRM_VIGS_FENCE_SIGNALED 0x0C
 #define DRM_VIGS_FENCE_UNREF 0x0D
 #define DRM_VIGS_PLANE_SET_ZPOS 0x0E
+#define DRM_VIGS_PLANE_SET_TRANSFORM 0x0F
 
 #define DRM_VIGS_DP_CREATE_SURFACE 0x20
 #define DRM_VIGS_DP_OPEN_SURFACE 0x21
@@ -222,6 +231,8 @@ struct drm_vigs_dp_open_surface
             DRM_VIGS_FENCE_UNREF, struct drm_vigs_fence_unref)
 #define DRM_IOCTL_VIGS_PLANE_SET_ZPOS DRM_IOW(DRM_COMMAND_BASE + \
             DRM_VIGS_PLANE_SET_ZPOS, struct drm_vigs_plane_set_zpos)
+#define DRM_IOCTL_VIGS_PLANE_SET_TRANSFORM DRM_IOW(DRM_COMMAND_BASE + \
+            DRM_VIGS_PLANE_SET_TRANSFORM, struct drm_vigs_plane_set_transform)
 
 #define DRM_IOCTL_VIGS_DP_CREATE_SURFACE DRM_IOWR(DRM_COMMAND_BASE + \
             DRM_VIGS_DP_CREATE_SURFACE, struct drm_vigs_dp_create_surface)
