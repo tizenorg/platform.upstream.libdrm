@@ -44,6 +44,17 @@ typedef enum
 } vigs_drm_surface_format;
 
 /*
+ * Rotations.
+ */
+typedef enum
+{
+    vigs_drm_rotation_0   = 0x0,
+    vigs_drm_rotation_90  = 0x1,
+    vigs_drm_rotation_180 = 0x2,
+    vigs_drm_rotation_270 = 0x3,
+} vigs_drm_rotation;
+
+/*
  * Surface access flags.
  */
 #define VIGS_DRM_SAF_READ 1
@@ -239,6 +250,12 @@ int vigs_drm_fence_check(struct vigs_drm_fence *fence);
 int vigs_drm_plane_set_zpos(struct vigs_drm_device *dev,
                             uint32_t plane_id,
                             int zpos);
+
+int vigs_drm_plane_set_transform(struct vigs_drm_device *dev,
+                                 uint32_t plane_id,
+                                 int hflip,
+                                 int vflip,
+                                 vigs_drm_rotation rotation);
 
 /*
  * @}

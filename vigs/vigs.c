@@ -674,6 +674,26 @@ int vigs_drm_plane_set_zpos(struct vigs_drm_device *dev,
     return (ret != 0) ? -errno : 0;
 }
 
+int vigs_drm_plane_set_transform(struct vigs_drm_device *dev,
+                                 uint32_t plane_id,
+                                 int hflip,
+                                 int vflip,
+                                 vigs_drm_rotation rotation)
+{
+    struct drm_vigs_plane_set_transform req =
+    {
+        .plane_id = plane_id,
+        .hflip = hflip,
+        .vflip = vflip,
+        .rotation = rotation
+    };
+    int ret;
+
+    ret = drmIoctl(dev->fd, DRM_IOCTL_VIGS_PLANE_SET_TRANSFORM, &req);
+
+    return (ret != 0) ? -errno : 0;
+}
+
 int vigs_drm_dp_surface_create(struct vigs_drm_device *dev,
                                uint32_t dp_plane,
                                uint32_t dp_fb_buf,
