@@ -23,6 +23,13 @@ Provides:       libdrm = %version-%release
 %description tools
 Diagnoistic tools to run a test for DRI and DRM
 
+%package tools-exynos
+Summary:	Diagnostic utilities for exynos
+Group:          Graphics & UI Framework/Utilities
+
+%description tools-exynos
+Diagnoistic tools to run a test for exynos
+
 %package devel
 Summary:        Userspace interface to kernel DRM services
 Requires:       kernel-headers
@@ -62,21 +69,18 @@ cp %{SOURCE1001} .
         --disable-nouveau-experimental-api \
         --disable-radeon \
         --disable-nouveau \
-        --enable-exynos-experimental-api
+        --enable-exynos-experimental-api \
+	--enable-install-test-programs
 
 make %{?_smp_mflags}
 make %{?_smp_mflags} -C tests dristat drmstat
 
 %install
 %make_install
-make -C tests/modeprint install DESTDIR=$RPM_BUILD_ROOT
-make -C tests/modetest install DESTDIR=$RPM_BUILD_ROOT
 %{__mkdir} -p $RPM_BUILD_ROOT/usr/bin
 %{__install}  \
 	tests/.libs/dristat \
-        tests/.libs/drmstat \
-	tests/modeprint/.libs/modeprint \
-	tests/modetest/.libs/modetest $RPM_BUILD_ROOT/usr/bin
+        tests/.libs/drmstat $RPM_BUILD_ROOT/usr/bin
 
 %post -p /sbin/ldconfig
 
@@ -100,8 +104,15 @@ make -C tests/modetest install DESTDIR=$RPM_BUILD_ROOT
 %manifest %{name}.manifest
 %_bindir/dristat
 %_bindir/drmstat
+%_bindir/kmstest
 %_bindir/modeprint
 %_bindir/modetest
+
+%files tools-exynos
+%manifest %{name}.manifest
+%_bindir/exynos_fimg2d_test
+%_bindir/ipptest
+%_bindir/rottest
 
 %files devel
 %manifest %{name}.manifest

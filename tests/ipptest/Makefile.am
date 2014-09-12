@@ -4,8 +4,13 @@ AM_CFLAGS = \
 	-I$(top_srcdir)/exynos/ \
 	-I$(top_srcdir)
 
+if HAVE_INSTALL_TESTS
+bin_PROGRAMS = \
+	ipptest
+else
 noinst_PROGRAMS = \
 	ipptest
+endif
 
 ipptest_SOURCES = \
 	fimctest.c \
