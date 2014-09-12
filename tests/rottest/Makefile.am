@@ -4,8 +4,13 @@ AM_CFLAGS = \
 	-I$(top_srcdir)/exynos/ \
 	-I$(top_srcdir)
 
+if HAVE_INSTALL_TESTS
+bin_PROGRAMS = \
+	rottest
+else
 noinst_PROGRAMS = \
 	rottest
+endif
 
 rottest_SOURCES = \
 	rottest.c \
