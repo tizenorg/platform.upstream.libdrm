@@ -1,12 +1,13 @@
 Name:           libdrm
 Version:        2.4.52
-Release:        4
+Release:        0
 License:        MIT
 Url:            http://cgit.freedesktop.org/mesa/drm
 Summary:        Userspace interface to kernel DRM services
 Group:          Graphics & UI Framework/Libraries
 Source0:        %{name}-%{version}.tar.bz2
 Source1001:     libdrm.manifest
+
 BuildRequires:  kernel-headers
 BuildRequires:  pkgconfig(pciaccess)
 BuildRequires:  pkgconfig(pthread-stubs)
@@ -15,7 +16,7 @@ BuildRequires:  pkgconfig(pthread-stubs)
 Direct Rendering Manager headers and kernel modules.
 
 %package tools
-Summary:	Diagnostic utilities for DRI and DRM
+Summary:        Diagnostic utilities for DRI and DRM
 Group:          Graphics & UI Framework/Utilities
 Obsoletes:      libdrm < %version-%release
 Provides:       libdrm = %version-%release
@@ -41,20 +42,19 @@ Development related files.
 Summary:        Userspace interface to kernel DRM buffer management
 
 %description -n libkms
-Userspace interface to kernel DRM buffer management
+Userspace interface to kernel DRM buffer management files
 
 %package intel
 Summary:        Userspace interface to intel graphics kernel DRM buffer management
 
 %description intel
-Userspace interface to intel graphics kernel DRM buffer management
+Userspace interface to intel graphics kernel DRM buffer management files
 
 %prep
 %setup -q
-
+cp %{SOURCE1001} .
 
 %build
-cp %{SOURCE1001} .
 %reconfigure \
         --enable-static=yes  \
         --enable-udev \
@@ -62,21 +62,21 @@ cp %{SOURCE1001} .
         --disable-nouveau-experimental-api \
         --disable-radeon \
         --disable-nouveau \
-        --enable-exynos-experimental-api
+        --enable-exynos-experimental-api \
+        --enable-install-test-programs
 
-make %{?_smp_mflags}
-make %{?_smp_mflags} -C tests dristat drmstat
+%__make %{?_smp_mflags}
+%__make %{?_smp_mflags} -C tests dristat drmstat
 
 %install
 %make_install
-make -C tests/modeprint install DESTDIR=$RPM_BUILD_ROOT
-make -C tests/modetest install DESTDIR=$RPM_BUILD_ROOT
-%{__mkdir} -p $RPM_BUILD_ROOT/usr/bin
+%{__mkdir} -p %{buildroot}%{_bindir}
 %{__install}  \
-	tests/.libs/dristat \
+        tests/.libs/dristat \
         tests/.libs/drmstat \
-	tests/modeprint/.libs/modeprint \
-	tests/modetest/.libs/modetest $RPM_BUILD_ROOT/usr/bin
+        %{buildroot}%{_bindir}
+
+rm -f %{buildroot}%{_bindir}/kmstest
 
 %post -p /sbin/ldconfig
 
@@ -98,10 +98,10 @@ make -C tests/modetest install DESTDIR=$RPM_BUILD_ROOT
 
 %files tools
 %manifest %{name}.manifest
-%_bindir/dristat
-%_bindir/drmstat
-%_bindir/modeprint
-%_bindir/modetest
+%{_bindir}/dristat
+%{_bindir}/drmstat
+%{_bindir}/modeprint
+%{_bindir}/modetest
 
 %files devel
 %manifest %{name}.manifest
@@ -120,7 +120,6 @@ make -C tests/modetest install DESTDIR=$RPM_BUILD_ROOT
 %{_libdir}/libdrm_exynos.so
 %{_libdir}/libdrm_vigs.so
 %{_libdir}/pkgconfig/*
-
 
 %files -n libkms
 %manifest %{name}.manifest
