@@ -509,7 +509,6 @@ AC_CONFIG_FILES([
 	tests/exynos/Makefile
 	tests/ipptest/Makefile
 	tests/rottest/Makefile
-	include/Makefile
 	include/drm/Makefile
 	man/Makefile
 	libdrm.pc])

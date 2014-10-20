@@ -1,5 +1,5 @@
 Name:           libdrm
-Version:        2.4.52
+Version:        2.4.58
 Release:        4
 License:        MIT
 Url:            http://cgit.freedesktop.org/mesa/drm
@@ -66,7 +66,9 @@ cp %{SOURCE1001} .
         --enable-static=yes  \
         --enable-udev \
         --enable-libkms \
+%ifarch i586 i686 %ix86
         --disable-nouveau-experimental-api \
+%endif
         --disable-radeon \
         --disable-nouveau \
         --enable-exynos-experimental-api \
