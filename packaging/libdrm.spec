@@ -33,11 +33,11 @@ Diagnoistic tools to run a test for exynos
 %package devel
 Summary:        Userspace interface to kernel DRM services
 Requires:       kernel-headers
-Requires:       libdrm = %{version}
+Requires:       libdrm = %{version}-%{release}
 %ifarch i586 i686 %ix86 x86_64
-Requires:       libdrm-intel = %{version}
+Requires:       libdrm-intel = %{version}-%{release}
 %endif
-Requires:       libkms = %{version}
+Requires:       libkms = %{version}-%{release}
 
 %description devel
 Direct Rendering Manager headers and kernel modules.
