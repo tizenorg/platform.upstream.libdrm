@@ -33,7 +33,7 @@
 #include "gem.h"
 
 int util_gem_create_mmap(int fd, struct drm_exynos_gem_create *gem,
-					struct drm_exynos_gem_mmap *mmap,
+					struct exynos_gem_mmap_data *mmap,
 					unsigned int size)
 {
 	/* initialize structure for gem create */
@@ -46,7 +46,7 @@ int util_gem_create_mmap(int fd, struct drm_exynos_gem_create *gem,
 	}
 
 	/* initialize structure for gem mmap */
-	memset(mmap, 0x00, sizeof(struct drm_exynos_gem_mmap));
+	memset(mmap, 0x00, sizeof(struct exynos_gem_mmap_data));
 	mmap->handle = gem->handle;
 	mmap->size = gem->size;
 

@@ -261,7 +261,7 @@ void fimc_m2m_set_mode(struct connector *c, int count, int page_flip,
 	unsigned int width=720, height=1280, stride;
 	int ret, i, j, x;
 	struct drm_exynos_gem_create gem1[MAX_BUF], gem2[MAX_BUF];
-	struct drm_exynos_gem_mmap mmap1[MAX_BUF], mmap2[MAX_BUF];
+	struct exynos_gem_mmap_data mmap1[MAX_BUF], mmap2[MAX_BUF];
 	void *usr_addr1[MAX_BUF], *usr_addr2[MAX_BUF];
 	struct timeval begin, end;
 	struct drm_gem_close args;
@@ -300,7 +300,7 @@ void fimc_m2m_set_mode(struct connector *c, int count, int page_flip,
 			else if (ret == -2)
 				goto err_ipp_ctrl_close;
 		}
-		usr_addr1[i] = (void *)(unsigned long)mmap1[i].mapped;
+		usr_addr1[i] = mmap1[i].addr;
 
 		/* For source buffer map to IPP */
 		ret = exynos_drm_ipp_queue_buf(fd, &qbuf1[i], EXYNOS_DRM_OPS_SRC,
@@ -326,7 +326,7 @@ void fimc_m2m_set_mode(struct connector *c, int count, int page_flip,
 			else if (ret == -2)
 				goto err_ipp_ctrl_close;
 		}
-		usr_addr2[i] = (void*)(unsigned long)mmap2[i].mapped;
+		usr_addr2[i] = mmap2[i].addr;
 
 		/* For destination buffer map to IPP */
 		ret = exynos_drm_ipp_queue_buf(fd, &qbuf2[i], EXYNOS_DRM_OPS_DST,
@@ -433,7 +433,7 @@ void fimc_wb_set_mode(struct connector *c, int count, int page_flip,
 	struct drm_exynos_sz def_sz = {720, 1280};
 	struct drm_exynos_ipp_property property;
 	struct drm_exynos_gem_create gem[MAX_BUF];
-	struct drm_exynos_gem_mmap mmap[MAX_BUF];
+	struct exynos_gem_mmap_data mmap[MAX_BUF];
 	struct drm_exynos_ipp_queue_buf qbuf[MAX_BUF];	
 	void *usr_addr[MAX_BUF];
 	struct drm_exynos_ipp_cmd_ctrl cmd_ctrl;
@@ -471,7 +471,7 @@ void fimc_wb_set_mode(struct connector *c, int count, int page_flip,
 			if (ret == -1) return;
 			else if (ret == -2) goto err_ipp_ctrl_close;
 		}
-		usr_addr[i] = (void *)(unsigned long)mmap[i].mapped;
+		usr_addr[i] = mmap[i].addr;
 		/* For destination buffer map to IPP */
 		ret = exynos_drm_ipp_queue_buf(fd, &qbuf[i], EXYNOS_DRM_OPS_DST,
 						IPP_BUF_ENQUEUE, property.prop_id, i, gem[i].handle);

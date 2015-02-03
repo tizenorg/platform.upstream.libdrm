@@ -231,7 +231,7 @@ void rotator_1_N_set_mode(struct connector *c, int count, int page_flip,
 	unsigned int width, height, stride;
 	int ret, i, counter;
 	struct drm_exynos_gem_create gem1, gem2[MAX_BUF];
-	struct drm_exynos_gem_mmap mmap1, mmap2[MAX_BUF];
+	struct exynos_gem_mmap_data mmap1, mmap2[MAX_BUF];
 	void *usr_addr1, *usr_addr2[MAX_BUF];
 	struct timeval begin, end;
 	struct drm_gem_close args;
@@ -248,13 +248,13 @@ void rotator_1_N_set_mode(struct connector *c, int count, int page_flip,
 
 	/* For GEM create / mmap / draw buffer */
 	/* For source buffer */
-	ret = util_gem_create_mmap(fd, &gem1, &mmap1, &usr_addr1,
-							stride * height);
+	ret = util_gem_create_mmap(fd, &gem1, &mmap1, stride * height);
 	if (ret) {
 		fprintf(stderr, "failed to gem create mmap: %s\n",
 							strerror(errno));
 		return;
 	}
+	usr_addr1 = mmap1.addr;
 	util_draw_buffer(usr_addr1, 1, width, height, stride, 0);
 	sprintf(filename, "/opt/media/rot_src.bmp");
 	util_write_bmp(filename, usr_addr1, width, height);
@@ -262,12 +262,13 @@ void rotator_1_N_set_mode(struct connector *c, int count, int page_flip,
 	/* For destination buffer */
 	for (i = 0; i < MAX_BUF; i++) {
 		ret = util_gem_create_mmap(fd, &gem2[i], &mmap2[i],
-						&usr_addr2[i], stride * height);
+						stride * height);
 		if (ret) {
 			fprintf(stderr, "failed to gem create mmap: %d : %s\n",
 							i, strerror(errno));
 			goto err_gem_create_mmap;
 		}
+		usr_addr2[i] = mmap2[i].addr;
 		util_draw_buffer(usr_addr2[i], 0, 0, 0, 0, stride * height);
 		sprintf(filename, "/opt/media/rot_dst%d.bmp", i);
 		util_write_bmp(filename, usr_addr2[i], height, width);
@@ -420,7 +421,7 @@ void rotator_N_N_set_mode(struct connector *c, int count, int page_flip,
 	unsigned int width, height, stride;
 	int ret, i, counter;
 	struct drm_exynos_gem_create gem1[MAX_BUF], gem2[MAX_BUF];
-	struct drm_exynos_gem_mmap mmap1[MAX_BUF], mmap2[MAX_BUF];
+	struct exynos_gem_mmap_data mmap1[MAX_BUF], mmap2[MAX_BUF];
 	void *usr_addr1[MAX_BUF], *usr_addr2[MAX_BUF];
 	struct timeval begin, end;
 	struct drm_gem_close args;
@@ -439,24 +440,26 @@ void rotator_N_N_set_mode(struct connector *c, int count, int page_flip,
 	for (i = 0; i < MAX_BUF; i++) {
 		/* For source buffer */
 		ret = util_gem_create_mmap(fd, &gem1[i], &mmap1[i],
-						&usr_addr1[i], stride * height);
+						stride * height);
 		if (ret) {
 			fprintf(stderr, "failed to gem create mmap: %d : %s\n",
 							i, strerror(errno));
 			goto err_gem_create_mmap;
 		}
+		usr_addr1[i] = mmap1[i].addr;
 		util_draw_buffer(usr_addr1[i], 1, width, height, stride, 0);
 		sprintf(filename, "/opt/media/rot_src%d.bmp", i);
 		util_write_bmp(filename, usr_addr1[i], width, height);
 
 		/* For destination buffer */
 		ret = util_gem_create_mmap(fd, &gem2[i], &mmap2[i],
-						&usr_addr2[i], stride * height);
+						stride * height);
 		if (ret) {
 			fprintf(stderr, "failed to gem create mmap: %d : %s\n",
 							i, strerror(errno));
 			goto err_gem_create_mmap;
 		}
+		usr_addr2[i] = mmap2[i].addr;
 		util_draw_buffer(usr_addr2[i], 0, 0, 0, 0, stride * height);
 		sprintf(filename, "/opt/media/rot_dst%d.bmp", i);
 		util_write_bmp(filename, usr_addr2[i], height, width);

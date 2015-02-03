@@ -29,12 +29,15 @@
 #include <unistd.h>
 #include <string.h>
 #include <errno.h>
+#include <sys/mman.h>
+#include <sys/ioctl.h>
 
 #include "xf86drm.h"
 #include "xf86drmMode.h"
 #include "libkms.h"
 
 #include "exynos_drm.h"
+#include "gem.h"
 
 int exynos_gem_create(int fd, struct drm_exynos_gem_create *gem)
 {
@@ -51,14 +54,35 @@ int exynos_gem_create(int fd, struct drm_exynos_gem_create *gem)
 	return ret;
 }
 
-int exynos_gem_mmap(int fd, struct drm_exynos_gem_mmap *in_mmap)
+int exynos_gem_mmap(int fd, struct exynos_gem_mmap_data *in_mmap)
 {
-	int ret = 0;
+	int ret;
+	void *map;
+	struct drm_mode_map_dumb arg;
 
-	ret = ioctl(fd, DRM_IOCTL_EXYNOS_GEM_MMAP, in_mmap);
-	if (ret < 0)
-		fprintf(stderr, "failed to mmap: %s\n", strerror(-ret));
-	return ret;
+	memset(&arg, 0, sizeof(arg));
+	arg.handle = in_mmap->handle;
+
+	ret = ioctl(fd, DRM_IOCTL_MODE_MAP_DUMB, &arg);
+	if (ret) {
+		fprintf(stderr, "failed to map dumb buffer: %s\n",
+				strerror(errno));
+		return ret;
+	}
+
+	in_mmap->offset = arg.offset;
+
+	map = mmap(NULL, (size_t)in_mmap->size, PROT_READ | PROT_WRITE,
+			MAP_SHARED, fd, (off_t)arg.offset);
+	if (map == MAP_FAILED) {
+		fprintf(stderr, "failed to mmap buffer: %s\n",
+				strerror(errno));
+		return -EFAULT;
+	}
+
+	in_mmap->addr = map;
+
+	return 0;
 }
 
 int exynos_gem_close(int fd, struct drm_gem_close *gem_close)

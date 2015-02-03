@@ -2,8 +2,7 @@
 #define __UTIL_H__
 
 extern int util_gem_create_mmap(int fd, struct drm_exynos_gem_create *gem,
-					struct drm_exynos_gem_mmap *mmap,
-					void **addr,
+					struct exynos_gem_mmap_data *mmap,
 					unsigned int size);
 extern void util_draw_buffer(void *addr, unsigned int stripe,
 				unsigned int width, unsigned int height,
