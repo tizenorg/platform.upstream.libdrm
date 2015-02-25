@@ -33,6 +33,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <errno.h>
+#include <fcntl.h>
 
 #include <sys/mman.h>
 #include <linux/stddef.h>
@@ -819,5 +820,87 @@ fail2:
 fail1:
     *sfc = NULL;
 
+    return ret;
+}
+
+int vigs_drm_prime_export_fd(struct vigs_drm_device *dev,
+                             struct vigs_drm_surface *sfc,
+                             int *prime_fd)
+{
+    struct drm_prime_handle req = {
+        .handle = sfc->gem.handle,
+        .flags = DRM_CLOEXEC,
+    };
+    int ret;
+
+    ret = drmIoctl(dev->fd, DRM_IOCTL_PRIME_HANDLE_TO_FD, &req);
+
+    if (ret) {
+        ret = -errno;
+        goto fail;
+    }
+
+    *prime_fd = req.fd;
+
+fail:
+    return ret;
+}
+
+int vigs_drm_prime_import_fd(struct vigs_drm_device *dev,
+                             int prime_fd,
+                             struct vigs_drm_surface **sfc)
+{
+    struct vigs_drm_surface_impl *sfc_impl;
+    struct drm_vigs_surface_info info_req;
+    struct drm_prime_handle req = {
+        .fd = prime_fd,
+    };
+    int ret;
+
+    ret = drmIoctl(dev->fd, DRM_IOCTL_PRIME_FD_TO_HANDLE, &req);
+
+    if (ret) {
+        ret = -errno;
+        goto err;
+    }
+
+    sfc_impl = calloc(sizeof(*sfc_impl), 1);
+
+    if (!sfc_impl) {
+        ret = -ENOMEM;
+        goto err;
+    }
+
+    memset(&info_req, 0, sizeof(info_req));
+    info_req.handle = req.handle;
+
+    ret = drmIoctl(dev->fd, DRM_IOCTL_VIGS_SURFACE_INFO, &info_req);
+
+    if (ret) {
+        ret = -errno;
+        goto err_free_sfc_impl;
+    }
+
+    vigs_drm_gem_impl_init((struct vigs_drm_gem_impl*)sfc_impl,
+                           dev,
+                           req.handle,
+                           info_req.size,
+                           0 /* name */);
+
+    sfc_impl->base.width = info_req.width;
+    sfc_impl->base.height = info_req.height;
+    sfc_impl->base.stride = info_req.stride;
+    sfc_impl->base.format = info_req.format;
+    sfc_impl->base.scanout = info_req.scanout;
+    sfc_impl->base.id = info_req.id;
+
+    *sfc = &sfc_impl->base;
+
+    return 0;
+
+err_free_sfc_impl:
+    free(sfc_impl);
+
+err:
     return ret;
 }

@@ -286,6 +286,23 @@ int vigs_drm_dp_surface_open(struct vigs_drm_device *dev,
  * @}
  */
 
+/*
+ * PRIME functions.
+ * @{
+ */
+
+int vigs_drm_prime_export_fd(struct vigs_drm_device *dev,
+                             struct vigs_drm_surface *sfc,
+                             int *prime_fd);
+
+int vigs_drm_prime_import_fd(struct vigs_drm_device *dev,
+                             int prime_fd,
+                             struct vigs_drm_surface **sfc);
+
+/*
+ * @}
+ */
+
 #ifdef __cplusplus
 };
 #endif /* __cplusplus */
