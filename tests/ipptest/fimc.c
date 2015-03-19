@@ -205,7 +205,7 @@ int fimc_event_handler(struct drm_exynos_ipp_queue_buf *src_qbuf, struct drm_exy
 
 			printf("%s:src_buf_id[%d]dst_buf_id[%d]bmp_idx[%d]\n", __func__, src_buf_id, dst_buf_id, bmp_idx++);
 			if (cmd == IPP_CMD_M2M) {
-				sprintf(filename, "/opt/media/fimc_m2m_dst%d.bmp", bmp_idx);
+				sprintf(filename, RESULT_PATH "fimc_m2m_dst%d.bmp", bmp_idx);
 
 				util_write_bmp(filename, usr_addr[dst_buf_id], width, height);
 
@@ -227,7 +227,7 @@ int fimc_event_handler(struct drm_exynos_ipp_queue_buf *src_qbuf, struct drm_exy
 					goto err_ipp_ctrl_close;
 				}
 			} else if (cmd == IPP_CMD_WB) {
-				sprintf(filename, "/opt/media/fimc_wb_%d.bmp", bmp_idx);
+				sprintf(filename, RESULT_PATH "fimc_wb_%d.bmp", bmp_idx);
 
 				util_write_bmp(filename, usr_addr[dst_buf_id], width, height);
 			
@@ -311,7 +311,7 @@ void fimc_m2m_set_mode(struct connector *c, int count, int page_flip,
 		}
 
 		util_draw_buffer(usr_addr1[i], 1, width, height, stride, 0);
-		sprintf(filename, "/opt/media/fimc_m2m_org_src%d.bmp", j);
+		sprintf(filename, RESULT_PATH "fimc_m2m_org_src%d.bmp", j);
 		util_write_bmp(filename, usr_addr1[i], width, height);
 	}
 
@@ -337,7 +337,7 @@ void fimc_m2m_set_mode(struct connector *c, int count, int page_flip,
 		}
 
 		util_draw_buffer(usr_addr2[i], 0, 0, 0, 0, mmap2[i].size);
-		sprintf(filename, "/opt/media/fimc_m2m_org_dst%d.bmp", j);
+		sprintf(filename, RESULT_PATH "fimc_m2m_org_dst%d.bmp", j);
 		util_write_bmp(filename, usr_addr2[i], height, width);
 	}
 

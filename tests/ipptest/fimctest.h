@@ -8,6 +8,8 @@
 #define HALF_LOOP 10
 #define MAX_BUF 3
 
+#define RESULT_PATH "/tmp/"
+
 struct connector {
 	uint32_t id;
 	char mode_str[64];

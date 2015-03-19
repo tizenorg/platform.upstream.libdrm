@@ -453,7 +453,7 @@ int main(int argc, char **argv)
 			printf("[%d] : %d\n", i + 1, usec[i]);
 			sum += usec[i];
 		}
-		printf("rotator : cma\n");
+		printf("rotator : result files are in %s\n", RESULT_PATH);
 		printf("avg : [%d]\n", sum / MAX_LOOP);
 		getchar();
 	}

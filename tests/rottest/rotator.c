@@ -191,7 +191,7 @@ static int rotator_event_handler(int fd, int idx, int prop_id,
 			src_buf_id = ipp_event->buf_id[EXYNOS_DRM_OPS_SRC];
 			dst_buf_id = ipp_event->buf_id[EXYNOS_DRM_OPS_DST];
 
-			sprintf(filename, "/opt/media/rot_%d_%d.bmp", idx,
+			sprintf(filename, RESULT_PATH "rot_%d_%d.bmp", idx,
 								dst_buf_id);
 			util_write_bmp(filename, usr_addr[dst_buf_id], width,
 									height);
@@ -256,7 +256,7 @@ void rotator_1_N_set_mode(struct connector *c, int count, int page_flip,
 	}
 	usr_addr1 = mmap1.addr;
 	util_draw_buffer(usr_addr1, 1, width, height, stride, 0);
-	sprintf(filename, "/opt/media/rot_src.bmp");
+	sprintf(filename, RESULT_PATH "rot_src.bmp");
 	util_write_bmp(filename, usr_addr1, width, height);
 
 	/* For destination buffer */
@@ -270,7 +270,7 @@ void rotator_1_N_set_mode(struct connector *c, int count, int page_flip,
 		}
 		usr_addr2[i] = mmap2[i].addr;
 		util_draw_buffer(usr_addr2[i], 0, 0, 0, 0, stride * height);
-		sprintf(filename, "/opt/media/rot_dst%d.bmp", i);
+		sprintf(filename, RESULT_PATH "rot_dst%d.bmp", i);
 		util_write_bmp(filename, usr_addr2[i], height, width);
 	}
 
@@ -448,7 +448,7 @@ void rotator_N_N_set_mode(struct connector *c, int count, int page_flip,
 		}
 		usr_addr1[i] = mmap1[i].addr;
 		util_draw_buffer(usr_addr1[i], 1, width, height, stride, 0);
-		sprintf(filename, "/opt/media/rot_src%d.bmp", i);
+		sprintf(filename, RESULT_PATH "rot_src%d.bmp", i);
 		util_write_bmp(filename, usr_addr1[i], width, height);
 
 		/* For destination buffer */
@@ -461,7 +461,7 @@ void rotator_N_N_set_mode(struct connector *c, int count, int page_flip,
 		}
 		usr_addr2[i] = mmap2[i].addr;
 		util_draw_buffer(usr_addr2[i], 0, 0, 0, 0, stride * height);
-		sprintf(filename, "/opt/media/rot_dst%d.bmp", i);
+		sprintf(filename, RESULT_PATH "rot_dst%d.bmp", i);
 		util_write_bmp(filename, usr_addr2[i], height, width);
 	}
 
