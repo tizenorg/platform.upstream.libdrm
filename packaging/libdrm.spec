@@ -6,7 +6,6 @@ Url:            http://cgit.freedesktop.org/mesa/drm
 Summary:        Userspace interface to kernel DRM services
 Group:          Graphics & UI Framework/Libraries
 Source0:        %{name}-%{version}.tar.bz2
-Source1001:     libdrm.manifest
 
 BuildRequires:  kernel-headers
 BuildRequires:  pkgconfig(pciaccess)
@@ -59,7 +58,6 @@ Userspace interface to intel graphics kernel DRM buffer management files
 
 %prep
 %setup -q
-cp %{SOURCE1001} .
 
 %build
 %reconfigure \
@@ -101,26 +99,22 @@ rm -f %{buildroot}%{_bindir}/kmstest
 %postun intel -p /sbin/ldconfig
 
 %files
-%manifest %{name}.manifest
 %{_libdir}/libdrm.so.*
 %{_libdir}/libdrm_exynos.so.*
 %{_libdir}/libdrm_vigs.so.*
 
 %files tools
-%manifest %{name}.manifest
 %{_bindir}/dristat
 %{_bindir}/drmstat
 %{_bindir}/modeprint
 %{_bindir}/modetest
 
 %files tools-exynos
-%manifest %{name}.manifest
 %_bindir/exynos_fimg2d_test
 %_bindir/ipptest
 %_bindir/rottest
 
 %files devel
-%manifest %{name}.manifest
 %dir %{_includedir}/libdrm
 %{_includedir}/libdrm/*.h
 %dir %{_includedir}/libkms
@@ -138,11 +132,9 @@ rm -f %{buildroot}%{_bindir}/kmstest
 %{_libdir}/pkgconfig/*
 
 %files -n libkms
-%manifest %{name}.manifest
 %{_libdir}/libkms.so.*
 
 %ifarch i586 i686 %ix86 x86_64
 %files intel
-%manifest %{name}.manifest
 %{_libdir}/libdrm_intel.so.*
 %endif
