@@ -114,6 +114,8 @@ extern int drmIoctl(int fd, unsigned long request, void *arg);
 extern void *drmGetHashTable(void);
 extern drmHashEntry *drmGetEntry(int fd);
 
+typedef int (*ioctl_hook)(int fd, unsigned long request, void *arg);
+extern int drmIoctlSetHook(ioctl_hook hook);
 /**
  * Driver version information.
  *

@@ -162,15 +162,29 @@ void drmFree(void *pt)
 /**
  * Call ioctl, restarting if it is interupted
  */
+static ioctl_hook fp_ioctl_hook;
+
 int
 drmIoctl(int fd, unsigned long request, void *arg)
 {
     int	ret;
 
+    if (fp_ioctl_hook){
+        return fp_ioctl_hook(fd, request, arg);
+    }
+    
     do {
 	ret = ioctl(fd, request, arg);
     } while (ret == -1 && (errno == EINTR || errno == EAGAIN));
     return ret;
+}
+
+int
+drmIoctlSetHook(ioctl_hook hook)
+{
+    fp_ioctl_hook = hook;
+
+    return 0;
 }
 
 static unsigned long drmGetKeyFromFd(int fd)
@@ -1950,7 +1964,7 @@ int drmWaitVBlank(int fd, drmVBlankPtr vbl)
     timeout.tv_sec++;
 
     do {
-       ret = ioctl(fd, DRM_IOCTL_WAIT_VBLANK, vbl);
+       ret = drmIoctl(fd, DRM_IOCTL_WAIT_VBLANK, vbl);
        vbl->request.type &= ~DRM_VBLANK_RELATIVE;
        if (ret && errno == EINTR) {
 	       clock_gettime(CLOCK_MONOTONIC, &cur);
