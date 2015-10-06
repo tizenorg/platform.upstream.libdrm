@@ -58,12 +58,12 @@ int exynos_gem_mmap(int fd, struct exynos_gem_mmap_data *in_mmap)
 {
 	int ret;
 	void *map;
-	struct drm_mode_map_dumb arg;
+	struct drm_exynos_gem_map arg;
 
 	memset(&arg, 0, sizeof(arg));
 	arg.handle = in_mmap->handle;
 
-	ret = ioctl(fd, DRM_IOCTL_MODE_MAP_DUMB, &arg);
+	ret = ioctl(fd, DRM_IOCTL_EXYNOS_GEM_MAP, &arg);
 	if (ret) {
 		fprintf(stderr, "failed to map dumb buffer: %s\n",
 				strerror(errno));

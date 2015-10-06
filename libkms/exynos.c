@@ -125,7 +125,7 @@ static int
 exynos_bo_map(struct kms_bo *_bo, void **out)
 {
 	struct exynos_bo *bo = (struct exynos_bo *)_bo;
-	struct drm_mode_map_dumb arg;
+	struct drm_exynos_gem_map arg;
 	void *map = NULL;
 	int ret;
 
@@ -138,7 +138,7 @@ exynos_bo_map(struct kms_bo *_bo, void **out)
 	memset(&arg, 0, sizeof(arg));
 	arg.handle = bo->base.handle;
 
-	ret = drmIoctl(bo->base.kms->fd, DRM_IOCTL_MODE_MAP_DUMB, &arg);
+	ret = drmIoctl(bo->base.kms->fd, DRM_IOCTL_EXYNOS_GEM_MAP, &arg);
 	if (ret)
 		return ret;
 

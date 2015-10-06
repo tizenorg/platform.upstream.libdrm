@@ -283,14 +283,14 @@ drm_public void *exynos_bo_map(struct exynos_bo *bo)
 {
 	if (!bo->vaddr) {
 		struct exynos_device *dev = bo->dev;
-		struct drm_mode_map_dumb arg;
+		struct drm_exynos_gem_map arg;
 		void *map = NULL;
 		int ret;
 
 		memset(&arg, 0, sizeof(arg));
 		arg.handle = bo->handle;
 
-		ret = drmIoctl(dev->fd, DRM_IOCTL_MODE_MAP_DUMB, &arg);
+		ret = drmIoctl(dev->fd, DRM_IOCTL_EXYNOS_GEM_MAP, &arg);
 		if (ret) {
 			fprintf(stderr, "failed to map dumb buffer[%s].\n",
 				strerror(errno));
