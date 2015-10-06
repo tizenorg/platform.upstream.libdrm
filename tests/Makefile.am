@@ -10,7 +10,7 @@ check_PROGRAMS = \
 	dristat \
 	drmstat
 
-SUBDIRS = modeprint
+SUBDIRS = modeprint vbltest
 
 if HAVE_LIBKMS
 SUBDIRS += kmstest modetest
@@ -53,8 +53,6 @@ TESTS =						\
 	updatedraw				\
 	name_from_fd				\
 	$(NULL)
-
-SUBDIRS += vbltest $(NULL)
 
 if HAVE_INTEL
 TESTS +=					\
