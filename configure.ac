@@ -108,6 +108,10 @@ AC_ARG_ENABLE(install-test-programs,
 		  [Install test programs (default: no)]),
 		  [INSTALL_TESTS=$enableval], [INSTALL_TESTS=no])
 
+AC_ARG_ENABLE(sprd-experimental-api,
+	      AS_HELP_STRING([--enable-sprd-experimental-api],
+	      [Enable support for SPRD's experimental API (default: disabled)]),
+	      [SPRD=$enableval], [SPRD=no])
 dnl ===========================================================================
 dnl check compiler flags
 AC_DEFUN([LIBDRM_CC_TRY_FLAG], [
@@ -314,10 +318,16 @@ if test "x$INSTALL_TESTS" = xyes; then
 	AC_DEFINE(HAVE_INSTALL_TESTS, 1, [Install test programs])
 fi
 
+AM_CONDITIONAL(HAVE_SPRD, [test "x$SPRD" = xyes])
+if test "x$SPRD" = xyes; then
+	AC_DEFINE(HAVE_SPRD, 1, [Have SPRD support])
+fi
+
 AC_ARG_ENABLE([cairo-tests],
               [AS_HELP_STRING([--enable-cairo-tests],
                               [Enable support for Cairo rendering in tests (default: auto)])],
               [CAIRO=$enableval], [CAIRO=auto])
+
 PKG_CHECK_MODULES(CAIRO, cairo, [HAVE_CAIRO=yes], [HAVE_CAIRO=no])
 AC_MSG_CHECKING([whether to enable Cairo tests])
 if test "x$CAIRO" = xauto; then
@@ -500,6 +510,8 @@ AC_CONFIG_FILES([
 	freedreno/libdrm_freedreno.pc
 	vigs/Makefile
 	vigs/libdrm_vigs.pc
+	sprd/Makefile
+	sprd/libdrm_sprd.pc
 	tests/Makefile
 	tests/modeprint/Makefile
 	tests/modetest/Makefile
@@ -526,4 +538,6 @@ echo "  OMAP API       $OMAP"
 echo "  EXYNOS API     $EXYNOS"
 echo "  Freedreno API  $FREEDRENO"
 echo "  VIGS API       $VIGS"
+echo "  SPRD API       $SPRD"
+
 echo ""

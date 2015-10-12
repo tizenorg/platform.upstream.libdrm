@@ -72,7 +72,8 @@ cp %{SOURCE1001} .
         --disable-radeon \
         --disable-nouveau \
         --enable-exynos-experimental-api \
-        --enable-install-test-programs \
+		--enable-sprd-experimental-api \
+		--enable-install-test-programs \
         --disable-cairo-tests
 
 %__make %{?_smp_mflags}
@@ -128,6 +129,8 @@ rm -f %{buildroot}%{_bindir}/kmstest
 %{_includedir}/libkms/*.h
 %dir %{_includedir}/exynos
 %{_includedir}/exynos/*.h
+%dir %{_includedir}/sprd
+%{_includedir}/sprd/*.h
 %{_includedir}/*.h
 %{_libdir}/libdrm.so
 %ifarch i586 i686 %ix86 x86_64
@@ -135,6 +138,7 @@ rm -f %{buildroot}%{_bindir}/kmstest
 %endif
 %{_libdir}/libkms.so
 %{_libdir}/libdrm_exynos.so
+%{_libdir}/libdrm_sprd.so
 %{_libdir}/libdrm_vigs.so
 %{_libdir}/pkgconfig/*
 

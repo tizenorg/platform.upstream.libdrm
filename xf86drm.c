@@ -183,6 +183,7 @@ int
 drmIoctlSetHook(ioctl_hook hook)
 {
     fp_ioctl_hook = hook;
+    return 0;
 }
 
 static unsigned long drmGetKeyFromFd(int fd)
