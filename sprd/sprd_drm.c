@@ -53,6 +53,16 @@
 #define U642INTPTR(x) ( (unsigned int*) U642VOID(x) )
 #define VOID2U64(x) ((uint64_t)(unsigned long)(x))
 
+//#define SPRD_DEBUG_MSG 0
+
+#ifdef SPRD_DEBUG_MSG
+	#define SPRD_DRM_DEBUG(fmt, ...) fprintf(stdout, fmt, ##__VA_ARGS__)
+	#define SPRD_DRM_ERROR(fmt, ...) fprintf(stderr, fmt, ##__VA_ARGS__)
+#else
+	#define SPRD_DRM_DEBUG(fmt, ...)
+	#define SPRD_DRM_ERROR(fmt, ...)
+#endif
+
 
 #define FB_DEV_LCD  "/dev/fb0"
 //TODO::
@@ -126,6 +136,7 @@ struct sprd_drm_framebuffer {
 
 	uint32_t pitches[4];
 	uint32_t offsets[4];
+	uint32_t handles[4];
 	uint32_t width;
 	uint32_t height;
 	uint32_t depth;
@@ -226,6 +237,113 @@ static void sprd_drm_resource_del(int id)
 	drmHashDelete(resource_storage, id);
 }
 
+
+/*
+ * from kernel
+ * Original addfb only supported RGB formats, so figure out which one
+ */
+uint32_t sprd_drm_mode_legacy_fb_format(uint32_t bpp, uint32_t depth)
+{
+	uint32_t fmt;
+
+	switch (bpp) {
+	case 8:
+		fmt = DRM_FORMAT_C8;
+		break;
+	case 16:
+		if (depth == 15)
+			fmt = DRM_FORMAT_XRGB1555;
+		else
+			fmt = DRM_FORMAT_RGB565;
+		break;
+	case 24:
+		fmt = DRM_FORMAT_RGB888;
+		break;
+	case 32:
+		if (depth == 24)
+			fmt = DRM_FORMAT_XRGB8888;
+		else if (depth == 30)
+			fmt = DRM_FORMAT_XRGB2101010;
+		else
+			fmt = DRM_FORMAT_ARGB8888;
+		break;
+	default:
+		SPRD_DRM_DEBUG("bad bpp, assuming x8r8g8b8 pixel format\n");
+		fmt = DRM_FORMAT_XRGB8888;
+		break;
+	}
+
+	return fmt;
+}
+
+/*
+ * from kernel
+ *
+ * Just need to support RGB formats here for compat with code that doesn't
+ * use pixel formats directly yet.
+ */
+void sprd_drm_fb_get_bpp_depth(uint32_t format, unsigned int *depth, int *bpp)
+{
+	switch (format) {
+	case DRM_FORMAT_C8:
+	case DRM_FORMAT_RGB332:
+	case DRM_FORMAT_BGR233:
+		*depth = 8;
+		*bpp = 8;
+		break;
+	case DRM_FORMAT_XRGB1555:
+	case DRM_FORMAT_XBGR1555:
+	case DRM_FORMAT_RGBX5551:
+	case DRM_FORMAT_BGRX5551:
+	case DRM_FORMAT_ARGB1555:
+	case DRM_FORMAT_ABGR1555:
+	case DRM_FORMAT_RGBA5551:
+	case DRM_FORMAT_BGRA5551:
+		*depth = 15;
+		*bpp = 16;
+		break;
+	case DRM_FORMAT_RGB565:
+	case DRM_FORMAT_BGR565:
+		*depth = 16;
+		*bpp = 16;
+		break;
+	case DRM_FORMAT_RGB888:
+	case DRM_FORMAT_BGR888:
+		*depth = 24;
+		*bpp = 24;
+		break;
+	case DRM_FORMAT_XRGB8888:
+	case DRM_FORMAT_XBGR8888:
+	case DRM_FORMAT_RGBX8888:
+	case DRM_FORMAT_BGRX8888:
+		*depth = 24;
+		*bpp = 32;
+		break;
+	case DRM_FORMAT_XRGB2101010:
+	case DRM_FORMAT_XBGR2101010:
+	case DRM_FORMAT_RGBX1010102:
+	case DRM_FORMAT_BGRX1010102:
+	case DRM_FORMAT_ARGB2101010:
+	case DRM_FORMAT_ABGR2101010:
+	case DRM_FORMAT_RGBA1010102:
+	case DRM_FORMAT_BGRA1010102:
+		*depth = 30;
+		*bpp = 32;
+		break;
+	case DRM_FORMAT_ARGB8888:
+	case DRM_FORMAT_ABGR8888:
+	case DRM_FORMAT_RGBA8888:
+	case DRM_FORMAT_BGRA8888:
+		*depth = 32;
+		*bpp = 32;
+		break;
+	default:
+		SPRD_DRM_DEBUG("unsupported pixel format\n");
+		*depth = 0;
+		*bpp = 0;
+		break;
+	}
+}
 
 static inline uint32_t _get_refresh(struct fb_var_screeninfo * timing)
 {
@@ -381,6 +499,42 @@ static int sprd_drm_connector_LCD_create(struct sprd_drm_device * dev, struct sp
 	sprd_drm_mode_connector_update_from_frame_buffer(conn);
 
 	return 0;
+}
+
+static int32_t sprd_drm_framebuffer_create(struct sprd_drm_device * dev, struct drm_mode_fb_cmd2 * fb_cmd)
+{
+	struct sprd_drm_framebuffer * fb;
+
+	fb = drmMalloc(sizeof (struct sprd_drm_framebuffer));
+	fb->id = sprd_drm_resource_new_id(fb);
+	fb->refcount = 1;
+	DRMLISTADDTAIL(&fb->link, &dev->crtc_list);
+	dev->num_fb++;
+
+
+	fb->width  = fb_cmd->width;
+	fb->height = fb_cmd->height;
+	fb->pixel_format = fb_cmd->pixel_format;
+	fb->flags = fb_cmd->flags;
+
+	sprd_drm_fb_get_bpp_depth(fb_cmd->pixel_format, &fb->depth, &fb->bits_per_pixel);
+
+	memcpy(fb->handles, fb_cmd->handles, 4 * sizeof(fb->handles[0]));
+	memcpy(fb->pitches, fb_cmd->pitches, 4 * sizeof(fb->pitches[0]));
+	memcpy(fb->offsets, fb_cmd->offsets, 4 * sizeof(fb->offsets[0]));
+
+
+	return 0;
+}
+
+static void sprd_drm_framebuffer_remove(struct sprd_drm_device * dev, struct sprd_drm_framebuffer * fb)
+{
+	if (--fb->refcount) {
+		sprd_drm_resource_new_id(fb->id);
+		DRMLISTDEL(&fb->link);
+		dev->num_fb--;
+		drmFree(fb);
+	}
 }
 
 static struct sprd_drm_mode_encoder * sprd_drm_encoder_create(struct sprd_drm_device * dev, uint32_t encoder_type)
@@ -660,22 +814,58 @@ static int sprd_drm_mode_set_crtc(int fd, void *arg)
 
 static int sprd_drm_mode_add_fb(int fd, void *arg)
 {
-	return -1;
+	struct drm_mode_fb_cmd *or = (struct drm_mode_fb_cmd *)arg;
+	struct drm_mode_fb_cmd2 r;
+
+	/* Use new struct with format internally */
+	r.fb_id = or->fb_id;
+	r.width = or->width;
+	r.height = or->height;
+	r.pitches[0] = or->pitch;
+	r.pixel_format = sprd_drm_mode_legacy_fb_format(or->bpp, or->depth);
+	r.handles[0] = or->handle;
+
+	return sprd_drm_framebuffer_create(get_sprd_device(fd), &r);
 }
 
 static int sprd_drm_mode_add_fb2(int fd, void *arg)
 {
-	return -1;
+	struct drm_mode_fb_cmd2 *r = (struct drm_mode_fb_cmd *)arg;
+
+	return sprd_drm_framebuffer_create(get_sprd_device(fd), &r);
 }
 
 static int sprd_drm_mode_rem_fb(int fd, void *arg)
 {
-	return -1;
+	struct sprd_drm_framebuffer *fb;
+	uint32_t id = *((uint32_t *)arg);
+
+	fb = (struct sprd_drm_framebuffer *)sprd_drm_resource_get(id);
+
+	if (!fb) return EINVAL;
+
+	sprd_drm_framebuffer_remove(get_sprd_device(fd), fb);
+
+	return 0;
 }
 
 static int sprd_drm_mode_get_fb(int fd, void *arg)
 {
-	return -1;
+	struct drm_mode_fb_cmd *fb_cmd = (struct drm_mode_fb_cmd *)arg;
+	struct sprd_drm_framebuffer *fb = NULL;
+
+	fb = (struct sprd_drm_framebuffer *)sprd_drm_resource_get(fb_cmd->fb_id);
+
+	if (!fb) return EINVAL;
+
+	fb_cmd->width 	= fb->width;
+	fb_cmd->height 	= fb->height;
+	fb_cmd->pitch 	= fb->pitches;
+	fb_cmd->bpp 	= fb->bits_per_pixel;
+	fb_cmd->depth 	= fb->depth;
+	fb_cmd->handle 	= fb->handles[0];
+
+	return 0;
 }
 
 static int sprd_drm_mode_page_flip(int fd, void *arg)
