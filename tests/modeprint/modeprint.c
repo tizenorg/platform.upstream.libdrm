@@ -412,6 +412,9 @@ int main(int argc, char **argv)
 		return 1;
 	}
 
+	if (strcmp(module_name,"sprd") == 0)
+		sprd_device_create(fd);
+
 	res = drmModeGetResources(fd);
 	if (res == 0) {
 		printf("Failed to get resources from card\n");
