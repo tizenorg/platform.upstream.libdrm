@@ -1,5 +1,6 @@
 AM_CFLAGS = \
 	-I$(top_srcdir)/include/drm \
+	-I$(top_srcdir)/sprd/ \
 	-I$(top_srcdir)
 
 if HAVE_INSTALL_TESTS
@@ -13,4 +14,6 @@ endif
 modeprint_SOURCES = \
 	modeprint.c
 modeprint_LDADD = \
-	$(top_builddir)/libdrm.la
+	$(top_builddir)/libdrm.la \
+	$(top_builddir)/sprd/libdrm_sprd.la
+	 
