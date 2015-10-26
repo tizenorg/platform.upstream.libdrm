@@ -11,6 +11,7 @@ Source1001:		%name.manifest
 BuildRequires:  kernel-headers
 BuildRequires:  pkgconfig(pciaccess)
 BuildRequires:  pkgconfig(pthread-stubs)
+BuildRequires:  kernel-headers-tizen-dev
 
 %description
 Direct Rendering Manager headers and kernel modules.
