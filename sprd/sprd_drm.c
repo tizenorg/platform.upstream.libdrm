@@ -30,17 +30,19 @@
 
 #include <stdlib.h>
 #include <stdio.h>
-#include <string.h>
-#include <errno.h>
+#include <stdbool.h>
 #include <stdint.h>
+#include <string.h>
+#include <ctype.h>
+#include <errno.h>
 #include <fcntl.h>
 #include <unistd.h>
-
 #include <sys/mman.h>
 #include <sys/ioctl.h>
 
 #include <linux/stddef.h>
 #include <linux/fb.h>
+#include <video/sprd_fb.h>
 
 #include "xf86drm.h"
 #include "xf86drmMode.h"
@@ -53,7 +55,7 @@
 #define U642INTPTR(x) ( (unsigned int*) U642VOID(x) )
 #define VOID2U64(x) ((uint64_t)(unsigned long)(x))
 
-//#define SPRD_DEBUG_MSG 0
+#define SPRD_DEBUG_MSG 0
 
 #ifdef SPRD_DEBUG_MSG
 	#define SPRD_DRM_DEBUG(fmt, ...) fprintf(stdout, fmt, ##__VA_ARGS__)
@@ -71,9 +73,15 @@
 
 #define  MAX_CRTC		1
 #define  MAX_PLANE		2
+#define  MAX_CONNECTOR	1
+#define  DEFAULT_ZPOZ	SPRD_LAYERS_OSD
+
+struct sprd_drm_device;
+
 
 struct sprd_drm_mode_mode {
 
+	bool b;
 	struct drm_mode_modeinfo drm_mode;
 
 	uint32_t mode_id; /**< Id */
@@ -91,6 +99,8 @@ struct sprd_drm_mode_connector {
 
 	drmMMListHead link;
 
+	struct sprd_drm_device * dev;
+
 	/* file descriptor of frame buffer */
 	int32_t fb_fd;
 	const char * fb_fd_name;
@@ -98,6 +108,8 @@ struct sprd_drm_mode_connector {
 	/* requested DPMS state */
 	int32_t dpms;
 
+	/* activated layers */
+	uint32_t activated_layers;
 
 	drmMMListHead modes;
 
@@ -137,6 +149,7 @@ struct sprd_drm_framebuffer {
 	uint32_t pitches[4];
 	uint32_t offsets[4];
 	uint32_t handles[4];
+	uint32_t names[4];
 	uint32_t width;
 	uint32_t height;
 	uint32_t depth;
@@ -147,6 +160,35 @@ struct sprd_drm_framebuffer {
 	drmMMListHead link;
 
 };
+
+/**
+ * sprd_drm_mode_set - new values for a CRTC config change
+ * @head: list management
+ * @fb: framebuffer to use for new config
+ * @crtc: CRTC whose configuration we're about to change
+ * @mode: mode timings to use
+ * @x: position of this CRTC relative to @fb
+ * @y: position of this CRTC relative to @fb
+ * @connectors: array of connectors to drive with this CRTC if possible
+ * @num_connectors: size of @connectors array
+ *
+ * Represents a single crtc the connectors that it drives with what mode
+ * and from which framebuffer it scans out from.
+ *
+ * This is used to set modes.
+ */
+struct sprd_drm_mode_set {
+	struct sprd_drm_framebuffer *fb;
+	struct sprd_drm_mode_crtc *crtc;
+//	struct drm_display_mode *mode;
+
+	uint32_t x;
+	uint32_t y;
+
+	struct sprd_drm_mode_connector *connectors[MAX_CONNECTOR];
+	uint32_t num_connectors;
+};
+
 
 /**
  * @drm_fd: file descriptor of drm device
@@ -163,7 +205,6 @@ struct sprd_drm_framebuffer {
  * enumerated by the driver are added here, as are global properties.  Some
  * global restrictions are also here, e.g. dimension restrictions.
  */
-
 struct sprd_drm_device {
 
 	drmMMListHead link;
@@ -242,7 +283,7 @@ static void sprd_drm_resource_del(int id)
  * from kernel
  * Original addfb only supported RGB formats, so figure out which one
  */
-uint32_t sprd_drm_mode_legacy_fb_format(uint32_t bpp, uint32_t depth)
+uint32_t sprd_drm_legacy_fb_format(uint32_t bpp, uint32_t depth)
 {
 	uint32_t fmt;
 
@@ -455,6 +496,9 @@ static void sprd_drm_mode_connector_update_from_frame_buffer(struct sprd_drm_mod
 			}
 
 			_fb_var_to_drm_mode(&mode->drm_mode, &mi);
+
+			//TODO: check real state
+			conn->dpms = DRM_MODE_DPMS_OFF;
 	    }
 	    else
 	    {
@@ -463,17 +507,49 @@ static void sprd_drm_mode_connector_update_from_frame_buffer(struct sprd_drm_mod
 	}
 }
 
+/*
+ * Get a gem global object name from a gem object handle
+ *
+ * @fd: file descriptor of drm device
+ * @handle: a gem object handle
+ *
+ * This interface is used to get a gem global object name from a gem object
+ * handle to a buffer that wants to share it with another process
+ *
+ * If true, return gem global object name(positive) else 0
+ */
+int sprd_drm_get_name(uint32_t fd, uint32_t handle)
+{
+	struct drm_gem_flink arg;
+	int ret;
+
+	if (!handle) return -EINVAL;
+
+	char strErroBuf[256] = {0,};
+	memset(&arg, 0, sizeof(arg));
+	arg.handle = handle;
+
+	ret = drmIoctl(fd, DRM_IOCTL_GEM_FLINK, &arg);
+	if (ret) {
+		SPRD_DRM_ERROR("failed to get gem global name[%s]\n", strerror_r(errno, strErroBuf, 256));
+		return ret;
+	}
+
+	return arg.name;
+}
+
 
 static int sprd_drm_connector_LCD_create(struct sprd_drm_device * dev, struct sprd_drm_mode_encoder * enc)
 {
 	struct sprd_drm_mode_connector * conn;
 
-	/*LCD*/
 	conn = drmMalloc(sizeof (struct sprd_drm_mode_connector));
 	conn->drm_conn.connector_id = sprd_drm_resource_new_id(conn);
 	conn->drm_conn.connector_type = DRM_MODE_CONNECTOR_LVDS;
 	//TODO:: unknown value;
 	conn->drm_conn.connector_type_id = 1;
+
+	conn->dev = dev;
 
 	//attach encoder
 	conn->encoder_ids[0] = enc->drm_encoder.encoder_id;
@@ -503,7 +579,16 @@ static int sprd_drm_connector_LCD_create(struct sprd_drm_device * dev, struct sp
 
 static int32_t sprd_drm_framebuffer_create(struct sprd_drm_device * dev, struct drm_mode_fb_cmd2 * fb_cmd)
 {
-	struct sprd_drm_framebuffer * fb;
+	struct sprd_drm_framebuffer * fb = NULL;
+	int i;
+	int names[4];
+
+
+	for (i = 0; i < 4; i++) {
+		names[i] = sprd_drm_get_name(dev->drm_fd, fb_cmd->handles[i]);
+		if (names[i] == 0)
+			return -EACCES;
+	}
 
 	fb = drmMalloc(sizeof (struct sprd_drm_framebuffer));
 	fb->id = sprd_drm_resource_new_id(fb);
@@ -522,7 +607,10 @@ static int32_t sprd_drm_framebuffer_create(struct sprd_drm_device * dev, struct 
 	memcpy(fb->handles, fb_cmd->handles, 4 * sizeof(fb->handles[0]));
 	memcpy(fb->pitches, fb_cmd->pitches, 4 * sizeof(fb->pitches[0]));
 	memcpy(fb->offsets, fb_cmd->offsets, 4 * sizeof(fb->offsets[0]));
+	memcpy(fb->names,   names,			 4 * sizeof(fb->names[0]));
 
+	//returned value
+	fb_cmd->fb_id = fb->id;
 
 	return 0;
 }
@@ -563,7 +651,7 @@ static struct sprd_drm_mode_crtc * sprd_drm_crtc_create(struct sprd_drm_device *
 	crtc->drm_crtc.fb_id = 0;
 
 	crtc->drm_crtc.count_connectors = 0;
-	crtc->drm_crtc.set_connectors_ptr  = 0;
+	crtc->drm_crtc.set_connectors_ptr  = VOID2U64(drmMalloc(MAX_CONNECTOR * sizeof(struct sprd_drm_mode_connector)));
 
 	crtc->drm_crtc.x = 0;
 	crtc->drm_crtc.y = 0;
@@ -600,6 +688,82 @@ static struct sprd_drm_mode_plane *  sprd_drm_plane_create(struct sprd_drm_devic
 
 	return plane;
 }
+
+static int sprd_drm_connector_modeset(struct sprd_drm_mode_connector * conn,
+		struct sprd_drm_mode_set * mode_set, int zpos) {
+
+    struct overlay_setting ovs = {0,};
+    struct overlay_display_setting ds = {0,};
+
+    ovs.layer_index = zpos;
+
+	if (mode_set->fb) {
+		//TODO:: support different formats
+		ovs.data_type = SPRD_DATA_FORMAT_RGB888;
+		ovs.y_endian = SPRD_DATA_ENDIAN_B0B1B2B3;
+		ovs.uv_endian = SPRD_DATA_ENDIAN_B0B1B2B3;
+		ovs.v_endian = SPRD_DATA_ENDIAN_B0B1B2B3;
+		ovs.rb_switch = 0;
+
+		//TODO:: I am not sure
+		ovs.rect.x = mode_set->x;
+		ovs.rect.y = mode_set->y;
+		ovs.rect.w = mode_set->fb->width;
+		ovs.rect.h = mode_set->fb->height;
+
+		ds.display_mode = SPRD_DISPLAY_OVERLAY_ASYNC;
+		ds.layer_index |= ovs.layer_index;
+		if (ovs.layer_index == SPRD_LAYERS_OSD) {
+			ds.osd_handle = mode_set->fb->names[0];
+		} else {
+			ds.img_handle = mode_set->fb->names[0];
+		}
+
+		if (conn->dpms != DRM_MODE_DPMS_ON) {
+			/* lcd on */
+			if (ioctl(conn->fb_fd, FBIOBLANK, FB_BLANK_UNBLANK) < 0) {
+				SPRD_DRM_ERROR("FB_BLANK_UNBLANK is failed.: %s\n",
+						strerror (errno));
+				return -EACCES;
+			}
+		}
+
+		conn->dpms = DRM_MODE_DPMS_ON;
+
+		if (ioctl(conn->fb_fd, SPRD_FB_SET_OVERLAY, &ovs) == -1) {
+			SPRD_DRM_ERROR( "error:%s Unable to set overlay: SPRD_FB_SET_OVERLAY\n",
+					strerror (errno));
+			return -EACCES;
+		}
+
+		if (ioctl(conn->fb_fd, SPRD_FB_DISPLAY_OVERLAY, &ds) == -1) {
+			SPRD_DRM_ERROR( "error:%s Unable to SPRD_FB_DISPLAY_OVERLAY layer %d\n",
+					strerror (errno), ds.layer_index);
+			return -EACCES;
+		}
+
+		conn->activated_layers |= zpos;
+		mode_set->fb->refcount++;
+	}
+	else {
+		conn->activated_layers &= ~zpos;
+
+		//TODO::disable one layer
+
+		if (!conn->activated_layers) {
+			conn->dpms = DRM_MODE_DPMS_OFF;
+			/* lcd off */
+			if (ioctl(conn->fb_fd, FBIOBLANK, FB_BLANK_POWERDOWN) < 0) {
+				SPRD_DRM_ERROR("FB_BLANK_UNBLANK is failed.: %s\n", strerror (errno));
+				return -EACCES;
+			}
+		}
+
+	}
+
+	return 0;
+}
+
 
 static struct sprd_drm_device * get_sprd_device(int fd)
 {
@@ -807,32 +971,125 @@ static int sprd_drm_mode_set_plane(int fd, void *arg)
 	return -1;
 }
 
+/*
+ * We should do following:
+	IOCTL(fd,FBIOBLANK)
+	IOCTL(fd,SPRD_FB_SET_OVERLAY)
+	IOCTL(fd,SPRD_FB_DISPLAY_OVERLAY)
+*/
 static int sprd_drm_mode_set_crtc(int fd, void *arg)
 {
-	return sprd_drm_mode_set_plane(fd, arg);
+	struct drm_mode_crtc * crtc_cmd = (struct drm_mode_crtc *) arg;
+	struct sprd_drm_mode_crtc * crtc;
+	struct sprd_drm_framebuffer * fb = NULL;
+	struct sprd_drm_mode_set mode_set;
+	int i,j;
+
+	memset(&mode_set, 0, sizeof(struct sprd_drm_mode_set));
+
+	crtc = sprd_drm_resource_get(crtc_cmd->crtc_id);
+	if (!crtc)
+		return -EINVAL;
+	mode_set.crtc = crtc;
+
+
+	if (crtc_cmd->fb_id) {
+		mode_set.fb = sprd_drm_resource_get(crtc_cmd->fb_id);
+		if (!mode_set.fb)
+			return -EINVAL;
+	}
+
+
+	//disable all connectors(and layers) witch are connected with this crtc
+	if (crtc_cmd->fb_id == 0 && crtc_cmd->count_connectors == 0) {
+		if (crtc->drm_crtc.set_connectors_ptr) {
+
+			int * ids = U642INTPTR(crtc->drm_crtc.set_connectors_ptr);
+
+			for (i = 0; i < crtc->drm_crtc.count_connectors; i++) {
+				mode_set.connectors[i] = (struct sprd_drm_mode_connector *)sprd_drm_resource_get(ids[i]);
+				if (mode_set.connectors[i])
+					mode_set.num_connectors++;
+			}
+		}
+	}
+	else if (crtc_cmd->count_connectors > 0) {
+
+		if (crtc_cmd->set_connectors_ptr == 0)
+			return -EINVAL;
+
+		int * ids = U642INTPTR(crtc_cmd->set_connectors_ptr);
+
+		for (i = 0; i < crtc_cmd->count_connectors; i++) {
+			mode_set.connectors[i] = (struct sprd_drm_mode_connector *)sprd_drm_resource_get(ids[i]);
+			if (mode_set.connectors[i] == NULL)
+				return -EINVAL;
+			mode_set.num_connectors++;
+		}
+	}
+
+	for (i = 0; i < mode_set.num_connectors; i++) {
+		if(sprd_drm_connector_modeset(mode_set.connectors[i], &mode_set, DEFAULT_ZPOZ) == 0) {
+			if (mode_set.fb) {
+				crtc->drm_crtc.fb_id = mode_set.fb->id;
+
+				//attach connector to crtc
+				int * ids = U642INTPTR(crtc->drm_crtc.set_connectors_ptr);
+				int new_connector = 1;
+				for (j = 0; j < crtc->drm_crtc.count_connectors; j++) {
+					if (ids[j] == mode_set.connectors[i]->drm_conn.connector_id)
+						new_connector = 0;
+				}
+
+				if (new_connector)
+					ids[crtc->drm_crtc.count_connectors++] = mode_set.connectors[i]->drm_conn.connector_id;
+			}
+			else
+			{
+				//detach fb from crtc
+				crtc->drm_crtc.fb_id = 0;
+
+				//detach connector from crtc
+				//TODO:: may be more then one connector, so we should use "for"
+				crtc->drm_crtc.count_connectors = 0;
+			}
+		}
+	}
+
+	return 0;
 }
 
 static int sprd_drm_mode_add_fb(int fd, void *arg)
 {
 	struct drm_mode_fb_cmd *or = (struct drm_mode_fb_cmd *)arg;
 	struct drm_mode_fb_cmd2 r;
+	int res;
+
+	memset(&r, 0, sizeof(struct drm_mode_fb_cmd2));
 
 	/* Use new struct with format internally */
-	r.fb_id = or->fb_id;
 	r.width = or->width;
 	r.height = or->height;
 	r.pitches[0] = or->pitch;
-	r.pixel_format = sprd_drm_mode_legacy_fb_format(or->bpp, or->depth);
+	r.pixel_format = sprd_drm_legacy_fb_format(or->bpp, or->depth);
 	r.handles[0] = or->handle;
 
-	return sprd_drm_framebuffer_create(get_sprd_device(fd), &r);
+	res = sprd_drm_framebuffer_create(get_sprd_device(fd), &r);
+
+	//returned value
+	or->fb_id = r.fb_id;
+
+	return res;
 }
 
 static int sprd_drm_mode_add_fb2(int fd, void *arg)
 {
 	struct drm_mode_fb_cmd2 *r = (struct drm_mode_fb_cmd *)arg;
+	int res;
 
-	return sprd_drm_framebuffer_create(get_sprd_device(fd), &r);
+	res = sprd_drm_framebuffer_create(get_sprd_device(fd), &r);
+
+	return res;
 }
 
 static int sprd_drm_mode_rem_fb(int fd, void *arg)
@@ -842,7 +1099,7 @@ static int sprd_drm_mode_rem_fb(int fd, void *arg)
 
 	fb = (struct sprd_drm_framebuffer *)sprd_drm_resource_get(id);
 
-	if (!fb) return EINVAL;
+	if (!fb) return -EINVAL;
 
 	sprd_drm_framebuffer_remove(get_sprd_device(fd), fb);
 
@@ -856,7 +1113,7 @@ static int sprd_drm_mode_get_fb(int fd, void *arg)
 
 	fb = (struct sprd_drm_framebuffer *)sprd_drm_resource_get(fb_cmd->fb_id);
 
-	if (!fb) return EINVAL;
+	if (!fb) return -EINVAL;
 
 	fb_cmd->width 	= fb->width;
 	fb_cmd->height 	= fb->height;
@@ -900,19 +1157,25 @@ struct _ioctl_hook _ioctl_hooks[] = {
 		DRM_IOCTL_MODE_ADDFB,				sprd_drm_mode_add_fb,
 		DRM_IOCTL_MODE_ADDFB2,				sprd_drm_mode_add_fb2,
 		DRM_IOCTL_MODE_RMFB,				sprd_drm_mode_rem_fb,
-		DRM_IOCTL_MODE_GETFB,				sprd_drm_mode_get_fb,
+		DRM_IOCTL_MODE_GETFB,				sprd_drm_mode_get_fb/*,
 		DRM_IOCTL_MODE_PAGE_FLIP,			sprd_drm_mode_page_flip,
 		DRM_IOCTL_WAIT_VBLANK,				sprd_drm_wait_vblank
+*/
 };
 
 static int sprd_ioctl_hook(int fd, unsigned long request, void *arg)
 {
     uint32_t i;
+    int32_t ret;
 	for (i = 0; i < sizeof(_ioctl_hooks)/sizeof (struct _ioctl_hook); i++) {
 		if (_ioctl_hooks[i].request == request)
 			return _ioctl_hooks[i].hook(fd,arg);
 	}
-	return -1;
+
+    do {
+    	ret = ioctl(fd, request, arg);
+    } while (ret == -1 && (errno == EINTR || errno == EAGAIN));
+	return ret;
 }
 
 /*
