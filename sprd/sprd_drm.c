@@ -177,6 +177,13 @@ struct sprd_drm_property {
 	drmMMListHead enum_blob_list;
 };
 
+struct sprd_drm_event_vblank {
+	drmVBlank vbl;
+	uint32_t type;
+	uint64_t user_data;
+	struct drm_mode_crtc set_crtc_info;
+};
+
 /**
  * @drm_fd: file descriptor of drm device
  * @num_fb: number of fbs available
@@ -200,6 +207,8 @@ struct sprd_drm_device {
 
 	uint32_t num_fb;
 	drmMMListHead fb_list;
+
+	struct sprd_drm_event_vblank * page_flip_event;
 
 	uint32_t num_connector;
 	drmMMListHead connector_list;
@@ -1389,23 +1398,34 @@ static int sprd_drm_mode_set_crtc(int fd, void *arg)
 		return -EINVAL;
 	}
 
-	ids = U642INTPTR(crtc_cmd->set_connectors_ptr);
-	for (i = 0; i < crtc_cmd->count_connectors; i++) {
-		conns[i] = (struct sprd_drm_mode_connector *)sprd_drm_resource_get(ids[i]);
-		if (conns[i] == NULL)
-			return -EINVAL;
-		//TODO:: check new mode for connector
-	}
+	if (crtc_cmd->count_connectors > 0) {
+		ids = U642INTPTR(crtc_cmd->set_connectors_ptr);
+		for (i = 0; i < crtc_cmd->count_connectors; i++) {
+			conns[i] = (struct sprd_drm_mode_connector *)sprd_drm_resource_get(ids[i]);
+			if (conns[i] == NULL)
+				return -EINVAL;
+			//TODO:: check new mode for connector
+		}
 
-	/**
-	 * TODO:: reconfigure mode setting:
-	 * 	1) check new mode with all connectors
-	 * 	2) check previous pipes (connections crtc and connector)
-	 *
-	 * 	NOTE: now we jast set new pipas
-	 */
-	crtc->drm_crtc.count_connectors = crtc_cmd->count_connectors;
-	memcpy(U642VOID(crtc->drm_crtc.set_connectors_ptr), ids, crtc_cmd->count_connectors);
+		/**
+		 * TODO:: reconfigure mode setting:
+		 * 	1) check new mode with all connectors
+		 * 	2) check previous pipes (connections crtc and connector)
+		 *
+		 * 	NOTE: now we jast set new pipas
+		 */
+		crtc->drm_crtc.count_connectors = crtc_cmd->count_connectors;
+		memcpy(U642VOID(crtc->drm_crtc.set_connectors_ptr), ids, crtc_cmd->count_connectors);
+	}
+	else {
+		ids = U642INTPTR(crtc->drm_crtc.set_connectors_ptr);
+		for (i = 0; i < crtc->drm_crtc.count_connectors; i++) {
+			conns[i] = (struct sprd_drm_mode_connector *)sprd_drm_resource_get(ids[i]);
+			if (conns[i] == NULL)
+				return -EINVAL;
+			//TODO:: check new mode for connector
+		}
+	}
 
 
 	//update configure
@@ -1523,15 +1543,138 @@ static int sprd_drm_mode_get_fb(int fd, void *arg)
 	return 0;
 }
 
-//static int sprd_drm_mode_page_flip(int fd, void *arg)
-//{
-//	return -1;
-//}
-//
-//static int sprd_drm_wait_vblank(int fd, void *arg)
-//{
-//	return -1;
-//}
+static int sprd_drm_mode_page_flip(int fd, void *arg)
+{
+	struct sprd_drm_event_vblank * sprd_event;
+	struct sprd_drm_mode_crtc * crtc;
+	struct sprd_drm_device * dev;
+	drmVBlankPtr vbl;
+	struct drm_mode_crtc_page_flip * flip;
+	int res;
+
+	flip = (struct drm_mode_crtc_page_flip *)arg;
+
+	dev = get_sprd_device(fd);
+	if (!dev)
+		return -EINVAL;
+
+	crtc = sprd_drm_resource_get(flip->crtc_id);
+	if (!crtc)
+		return -EINVAL;
+
+	// TODO:
+	// Several page flips simultaneously prohibited.
+	if (dev->page_flip_event != NULL)
+		return -EBUSY;
+
+	sprd_event = drmMalloc(sizeof (struct sprd_drm_event_vblank));
+	sprd_event->type = DRM_EVENT_FLIP_COMPLETE;
+	sprd_event->user_data = flip->user_data;
+
+	sprd_event->set_crtc_info.fb_id = flip->fb_id;
+	sprd_event->set_crtc_info.crtc_id = flip->crtc_id;
+	sprd_event->set_crtc_info.mode_valid = 0;
+	sprd_event->set_crtc_info.gamma_size = crtc->drm_crtc.gamma_size;
+	sprd_event->set_crtc_info.x = crtc->drm_crtc.x;
+	sprd_event->set_crtc_info.y = crtc->drm_crtc.y;
+	sprd_event->set_crtc_info.count_connectors = 0;
+
+	sprd_event->vbl.request.signal = VOID2U64(sprd_event);
+	sprd_event->vbl.request.type = DRM_VBLANK_RELATIVE | DRM_VBLANK_EVENT;
+	sprd_event->vbl.request.sequence = 1;
+	sprd_event->vbl.request.type |= DRM_VBLANK_NEXTONMISS;
+
+    //TODO:: request vblank for each connectors(LCD, HDMI, WB) separately
+//	sprd_event->vbl.request.type |= DRM_SPRD_CRTC_PRIMARY << DRM_VBLANK_HIGH_CRTC_SHIFT;
+
+	res = ioctl(fd, DRM_IOCTL_WAIT_VBLANK, &sprd_event->vbl);
+	if (res != 0) {
+		drmFree(sprd_event);
+	}
+	else {
+		dev->page_flip_event = sprd_event;
+	}
+
+	return res;
+}
+
+static int sprd_drm_wait_vblank(int fd, void *arg)
+{
+	struct sprd_drm_event_vblank * sprd_event;
+	int res;
+
+	drmVBlankPtr vbl = (drmVBlankPtr)arg;
+
+    if (!(vbl->request.type & DRM_VBLANK_EVENT)) {
+    	return ioctl(fd, DRM_IOCTL_WAIT_VBLANK, vbl);
+    }
+
+	sprd_event = drmMalloc(sizeof (struct sprd_drm_event_vblank));
+	sprd_event->type = DRM_EVENT_VBLANK;
+	sprd_event->user_data = vbl->request.signal;
+	vbl->request.signal = VOID2U64(sprd_event);
+
+	res = ioctl(fd, DRM_IOCTL_WAIT_VBLANK, vbl);
+
+	if (res != 0) {
+		drmFree(sprd_event);
+	}
+
+	return res;
+}
+
+static int sprd_drm_handle_event(int fd, drmEventContextPtr evctx)
+{
+	char buffer[1024];
+	int len, i;
+	struct drm_event *e;
+	struct drm_event_vblank *vblank;
+	struct sprd_drm_event_vblank *sprd_event;
+	struct sprd_drm_device * dev;
+
+
+	dev = get_sprd_device(fd);
+
+	len = read(fd, buffer, sizeof buffer);
+	if (len == 0)
+		return 0;
+	if (len < sizeof *e)
+		return -1;
+
+	i = 0;
+	while (i < len) {
+		e = (struct drm_event *) &buffer[i];
+		if (e->type == DRM_EVENT_VBLANK) {
+			vblank = (struct drm_event_vblank *) e;
+			sprd_event = U642VOID (vblank->user_data);
+			if (sprd_event->type == DRM_EVENT_VBLANK) {
+				if (evctx->vblank_handler != NULL)
+					evctx->vblank_handler(fd,
+							vblank->sequence,
+							vblank->tv_sec,
+							vblank->tv_usec,
+							U642VOID (sprd_event->user_data));
+			}
+			else if (sprd_event->type  == DRM_EVENT_FLIP_COMPLETE) {
+				if (dev->page_flip_event == sprd_event) {
+					sprd_drm_mode_set_crtc(fd, &sprd_event->set_crtc_info);
+					dev->page_flip_event = NULL;
+				}
+				if (evctx->version >= 2 &&
+						evctx->page_flip_handler != NULL)
+						evctx->page_flip_handler(fd,
+								vblank->sequence,
+								vblank->tv_sec,
+								vblank->tv_usec,
+								U642VOID (sprd_event->user_data));
+			}
+			drmFree(sprd_event);
+		}
+		i += e->length;
+	}
+
+	return 0;
+}
 
 struct _ioctl_hook {
 	unsigned long request;
@@ -1555,10 +1698,9 @@ struct _ioctl_hook _ioctl_hooks[] = {
 		DRM_IOCTL_MODE_ADDFB,				sprd_drm_mode_add_fb,
 		DRM_IOCTL_MODE_ADDFB2,				sprd_drm_mode_add_fb2,
 		DRM_IOCTL_MODE_RMFB,				sprd_drm_mode_rem_fb,
-		DRM_IOCTL_MODE_GETFB,				sprd_drm_mode_get_fb/*,
+		DRM_IOCTL_MODE_GETFB,				sprd_drm_mode_get_fb,
 		DRM_IOCTL_MODE_PAGE_FLIP,			sprd_drm_mode_page_flip,
 		DRM_IOCTL_WAIT_VBLANK,				sprd_drm_wait_vblank
-*/
 };
 
 static int sprd_ioctl_hook(int fd, unsigned long request, void *arg)
@@ -1600,6 +1742,7 @@ struct sprd_drm_device * sprd_device_create(int fd)
 	dev->drm_fd = fd;
 
 	drmIoctlSetHook(sprd_ioctl_hook);
+	drmHandleEventSetHook(sprd_drm_handle_event);
 
 
 	DRMINITLISTHEAD(&dev->crtc_list);
