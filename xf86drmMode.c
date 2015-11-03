@@ -841,6 +841,14 @@ int drmModeCrtcSetGamma(int fd, uint32_t crtc_id, uint32_t size,
 	return DRM_IOCTL(fd, DRM_IOCTL_MODE_SETGAMMA, &l);
 }
 
+static handle_event_hook handleEventHook = NULL;
+
+int drmHandleEventSetHook(handle_event_hook hook)
+{
+	handleEventHook = hook;
+	return 0;
+}
+
 int drmHandleEvent(int fd, drmEventContextPtr evctx)
 {
 	char buffer[1024];
@@ -850,6 +858,10 @@ int drmHandleEvent(int fd, drmEventContextPtr evctx)
 	
 	/* The DRM read semantics guarantees that we always get only
 	 * complete events. */
+	if(handleEventHook) {
+		if (handleEventHook(fd, evctx) == 0)
+			return 0;
+	}
 
 	len = read(fd, buffer, sizeof buffer);
 	if (len == 0)
