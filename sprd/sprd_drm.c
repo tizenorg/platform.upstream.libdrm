@@ -81,7 +81,10 @@
 #define  MAX_CRTC		1
 #define  MAX_PLANE		2
 #define  MAX_CONNECTOR	1
-#define  DEFAULT_ZPOZ	SPRD_LAYER_OSD
+#define  DEFAULT_LAYER	SPRD_LAYER_OSD
+#define  DEFAULT_ZPOZ	1
+
+#define  ZPOS_TO_LYR_ID(zpos) ( zpos == 1 ? SPRD_LAYER_OSD : SPRD_LAYER_IMG)
 
 #define DRM_PROP_NAME_LEN	32
 
@@ -164,10 +167,10 @@ struct sprd_drm_property_blob {
 	unsigned char data[];
 };
 
-struct sprd_drm_property_enum {
-	uint64_t value;
-	drmMMListHead head;
-	char name[DRM_PROP_NAME_LEN];
+
+struct sprd_drm_prop_enum_list {
+	int type;
+	const char *name;
 };
 
 struct sprd_drm_property {
@@ -176,12 +179,18 @@ struct sprd_drm_property {
 	uint32_t flags;
 	char name[DRM_PROP_NAME_LEN];
 	uint32_t num_values;
-	uint64_t *values;
+
+	//DRM_MODE_PROP_RANGE (num_values = 2)
+	int range_min, range_max;
+
+	//DRM_MODE_PROP_ENUM | DRM_MODE_PROP_BITMASK
+	struct sprd_drm_prop_enum_list *enum_list;
+
+	//DRM_MODE_PROP_BLOB
+	drmMMListHead blob_list;
 
 	void 	 (*prop_set)(struct sprd_drm_property *prop, uint32_t obj_id, uint64_t val);
 	uint64_t (*prop_get)(struct sprd_drm_property *prop, uint32_t obj_id);
-
-	drmMMListHead enum_blob_list;
 };
 
 struct sprd_drm_event_vblank {
@@ -228,6 +237,9 @@ struct sprd_drm_device {
 	drmMMListHead crtc_list;
 
 	drmMMListHead property_list;
+
+	struct sprd_drm_property *dpms_prop;
+
 };
 
 struct sprd_drm_framebuffer {
@@ -290,6 +302,9 @@ struct sprd_drm_resource {
 	int property_capacity;
 	void ** propertys;
 };
+
+
+struct sprd_drm_property * sprd_drm_create_dpms_prpoperty(struct sprd_drm_device * dev);
 
 static int sprd_drm_resource_new_id(void * val)
 {
@@ -633,7 +648,6 @@ static int sprd_drm_get_name(uint32_t fd, uint32_t handle)
 	return arg.name;
 }
 
-
 static int sprd_drm_connector_LCD_create(struct sprd_drm_device * dev, struct sprd_drm_mode_encoder * enc)
 {
 	struct sprd_drm_mode_connector * conn;
@@ -653,19 +667,17 @@ static int sprd_drm_connector_LCD_create(struct sprd_drm_device * dev, struct sp
 	conn->drm_conn.encoder_id = conn->encoder_ids[0];  /**< Current Encoder */
 	conn->drm_conn.encoders_ptr = VOID2U64(conn->encoder_ids);
 
-	//TODO: EDID, PDMS
-	conn->drm_conn.count_props = 0;
-	conn->drm_conn.props_ptr = 0;
-	conn->drm_conn.prop_values_ptr = 0;
-
-
-	//TODO: get size of screen from FB
 	conn->drm_conn.subpixel = DRM_MODE_SUBPIXEL_NONE;
 
 	DRMLISTADDTAIL(&conn->link, &dev->connector_list);
 	dev->num_connector++;
 
 	conn->fb_fd_name = FB_DEV_LCD;
+
+	if (!dev->dpms_prop)
+		dev->dpms_prop = sprd_drm_create_dpms_prpoperty(dev);
+
+	sprd_drm_resource_prop_add(conn->drm_conn.connector_id, dev->dpms_prop);
 
 	sprd_drm_mode_connector_update_from_frame_buffer(conn);
 
@@ -793,14 +805,13 @@ static struct sprd_drm_property * sprd_drm_create_zpos_prpoperty(struct sprd_drm
 	prop = drmMalloc(sizeof (struct sprd_drm_property));
 	prop->id = sprd_drm_resource_new_id(prop);
 	strcpy(prop->name, "zpos");
-	prop->flags = DRM_MODE_PROP_ENUM;
+	prop->flags = DRM_MODE_PROP_IMMUTABLE | DRM_MODE_PROP_RANGE;
 	prop->prop_set = sprd_drm_plane_set_property;
 	prop->prop_get = sprd_drm_plane_get_property;
 
-	prop->num_values = 0;
-	prop->values = 0;
-
-	DRMINITLISTHEAD(&prop->enum_blob_list);
+	prop->num_values = 2;
+	prop->range_min = 0;
+	prop->range_max = MAX_PLANE - 1;
 
 	DRMLISTADDTAIL(&prop->head, &dev->property_list);
 
@@ -862,6 +873,56 @@ static int sprd_drm_connector_enable(struct sprd_drm_mode_connector * conn)
 	return 0;
 }
 
+static void sprd_drm_connector_set_property(struct sprd_drm_property *prop, uint32_t obj_id, uint64_t val)
+{
+	struct sprd_drm_mode_connector * conn = sprd_drm_resource_get(obj_id);
+	if (conn) {
+		if (strcmp(prop->name, "DPMS") == 0) {
+			if (val == 0)
+				sprd_drm_connector_disable(conn);
+			else
+				sprd_drm_connector_enable(conn);
+		}
+	}
+}
+
+static uint64_t sprd_drm_connector_get_property(struct sprd_drm_property *prop, uint32_t obj_id)
+{
+	struct sprd_drm_mode_connector * conn = sprd_drm_resource_get(obj_id);
+	if (conn) {
+		if (strcmp(prop->name, "DPMS") == 0) {
+			return conn->dpms;
+		}
+	}
+	return 0;
+}
+
+static struct sprd_drm_prop_enum_list drm_dpms_enum_list[] =
+{	{ DRM_MODE_DPMS_ON, "On" },
+	{ DRM_MODE_DPMS_STANDBY, "Standby" },
+	{ DRM_MODE_DPMS_SUSPEND, "Suspend" },
+	{ DRM_MODE_DPMS_OFF, "Off" }
+};
+
+struct sprd_drm_property * sprd_drm_create_dpms_prpoperty(struct sprd_drm_device * dev)
+{
+
+	struct sprd_drm_property * prop;
+
+	prop = drmMalloc(sizeof (struct sprd_drm_property));
+	prop->id = sprd_drm_resource_new_id(prop);
+	strcpy(prop->name, "DPMS");
+	prop->flags = DRM_MODE_PROP_ENUM | DRM_MODE_PROP_IMMUTABLE;
+	prop->prop_set = sprd_drm_connector_set_property;
+	prop->prop_get = sprd_drm_connector_get_property;
+
+	prop->num_values = sizeof(drm_dpms_enum_list)/sizeof(struct sprd_drm_prop_enum_list);
+	prop->enum_list = drm_dpms_enum_list;
+
+	DRMLISTADDTAIL(&prop->head, &dev->property_list);
+
+	return prop;
+}
 
 
 static int sprd_drm_connector_overlay_set(struct sprd_drm_mode_connector * conn,
@@ -870,7 +931,7 @@ static int sprd_drm_connector_overlay_set(struct sprd_drm_mode_connector * conn,
     overlay_info ovi;
     overlay_display ov_disp;
 
-    ovi.layer_index = zpos;
+    ovi.layer_index = ZPOS_TO_LYR_ID(zpos);
 
 	if (fb) {
 
@@ -925,7 +986,8 @@ static int sprd_drm_connector_overlay_set(struct sprd_drm_mode_connector * conn,
 
 static int sprd_drm_connector_overlay_unset(struct sprd_drm_mode_connector * conn, int zpos) {
 
-	conn->activated_layers &= ~zpos;
+	uint32_t layer = ZPOS_TO_LYR_ID(zpos);
+	conn->activated_layers &= ~layer;
 
 	if (ioctl(conn->fb_fd, SPRD_FB_UNSET_OVERLAY, &zpos) == -1) {
 		SPRD_DRM_ERROR( "error:%s Unable to SPRD_FB_UNSET_OVERLAY layer %d\n", strerror (errno), zpos);
@@ -1009,6 +1071,28 @@ static int sprd_drm_mode_get_crtc(int fd, void *arg) {
 	return 0;
 }
 
+static int sprd_drm_mode_get_obj_properties(int fd, void *arg)
+{
+	struct drm_mode_obj_get_properties * get_prop = (struct drm_mode_obj_get_properties *)arg;
+	struct sprd_drm_property **props = NULL;
+	uint32_t count, i;
+	uint32_t * out_props_id;
+	uint64_t * out_values;
+
+	count = sprd_drm_resource_prop_list_get(get_prop->obj_id, &props);
+
+	if (get_prop->count_props == count) {
+		out_props_id = U642INTPTR(get_prop->props_ptr);
+		out_values = (uint64_t*) U642VOID(get_prop->prop_values_ptr);
+		for (i = 0; i < count; i++) {
+			out_props_id[i] = props[i]->id;
+			out_values[i] = props[i]->prop_get(props[i], get_prop->obj_id);
+		}
+	}
+	get_prop->count_props = count;
+
+	return 0;
+}
 
 static int sprd_drm_mode_get_connector(int fd, void *arg) {
 
@@ -1034,18 +1118,15 @@ static int sprd_drm_mode_get_connector(int fd, void *arg) {
 	}
 	out_conn->count_modes = conn->drm_conn.count_modes;
 
-	if(out_conn->props_ptr && out_conn->count_props == conn->drm_conn.count_props) {
-		len = sizeof(uint32_t) * out_conn->count_props;
-		memcpy(U642VOID(out_conn->props_ptr), U642VOID(conn->drm_conn.props_ptr), len);
-	}
-
-	if(out_conn->prop_values_ptr && out_conn->count_props == conn->drm_conn.count_props) {
-		len = sizeof(__u64) * out_conn->count_props;
-		memcpy(U642VOID(out_conn->prop_values_ptr), U642VOID(conn->drm_conn.prop_values_ptr), len);
-
-	}
-
-	out_conn->count_props = conn->drm_conn.count_props;
+	//get property
+	struct drm_mode_obj_get_properties get_prop = {
+			.obj_id 		= conn->drm_conn.connector_id,
+			.count_props 	= out_conn->count_props,
+			.props_ptr 		= out_conn->props_ptr,
+			.prop_values_ptr = out_conn->prop_values_ptr,
+	};
+	sprd_drm_mode_get_obj_properties(fd, &get_prop);
+	out_conn->count_props = get_prop.count_props;
 
 	out_conn->encoder_id 		= conn->drm_conn.encoder_id;
 	out_conn->connector_id 		= conn->drm_conn.connector_id;
@@ -1123,84 +1204,48 @@ static int sprd_drm_mode_get_property(int fd, void *arg)
 {
 	struct drm_mode_get_property * out_resp = arg;
 	struct sprd_drm_property *property;
-	uint32_t enum_count = 0;
-	int blob_count = 0;
-	uint32_t value_count = 0;
+	uint32_t count_values = 0;
+	struct drm_mode_property_enum *out_enum_blops;
+	uint64_t *out_values;
 	uint32_t i;
-	int copied;
-	struct sprd_drm_property_enum *prop_enum;
-	struct drm_mode_property_enum *enum_ptr;
-	struct sprd_drm_property_blob *prop_blob;
-//	uint32_t *blob_id_ptr;
-	uint64_t *values_ptr;
-//	uint32_t *blob_length_ptr;
 
 	property = sprd_drm_resource_get(out_resp->prop_id);
 
 	if (!property)
 		return -EINVAL;
 
-	if (property->flags & (DRM_MODE_PROP_ENUM | DRM_MODE_PROP_BITMASK)) {
-		DRMLISTFOREACHENTRY(prop_enum, &property->enum_blob_list, head)
-			enum_count++;
-	} else if (property->flags & DRM_MODE_PROP_BLOB) {
-		DRMLISTFOREACHENTRY(prop_blob, &property->enum_blob_list, head)
-			blob_count++;
-	}
-
-	value_count = property->num_values;
+	count_values = property->num_values;
 
 	strncpy(out_resp->name, property->name, DRM_PROP_NAME_LEN);
 	out_resp->name[DRM_PROP_NAME_LEN-1] = 0;
 	out_resp->flags = property->flags;
 
-	if ((out_resp->count_values >= value_count) && value_count) {
-		values_ptr = (uint64_t *)(unsigned long)out_resp->values_ptr;
-		for (i = 0; i < value_count; i++) {
-			values_ptr[i] = property->values[i];
+	out_values = 		(uint64_t *) 						U642INTPTR(out_resp->values_ptr);
+	out_enum_blops = 	(struct drm_mode_property_enum *)	U642INTPTR(out_resp->enum_blob_ptr);
+
+	if (property->flags & DRM_MODE_PROP_RANGE){
+		if (count_values && out_resp->count_values >= count_values) {
+			out_values[0] = property->range_min;
+			out_values[1] = property->range_max;
 		}
 	}
-	out_resp->count_values = value_count;
-
-	if (property->flags & (DRM_MODE_PROP_ENUM | DRM_MODE_PROP_BITMASK)) {
-		if ((out_resp->count_enum_blobs >= enum_count) && enum_count) {
-			copied = 0;
-			enum_ptr = (struct drm_mode_property_enum *)(unsigned long)out_resp->enum_blob_ptr;
-			DRMLISTFOREACHENTRY(prop_enum, &property->enum_blob_list, head) {
-				enum_ptr[copied].value = prop_enum->value;
-				memcpy(&enum_ptr[copied].name, &prop_enum->name, DRM_PROP_NAME_LEN);
-				copied++;
+	else if (property->flags & (DRM_MODE_PROP_ENUM | DRM_MODE_PROP_BITMASK)) {
+		if (count_values && out_resp->count_values >= count_values
+						&& out_resp->count_enum_blobs >= count_values) {
+			for (i = 0; i < count_values; i++) {
+				out_values[i] 			= property->enum_list[i].type;
+				out_enum_blops[i].value = property->enum_list[i].type;
+				strcpy(out_enum_blops[i].name, property->enum_list[i].name);
 			}
 		}
-		out_resp->count_enum_blobs = enum_count;
+		out_resp->count_enum_blobs = count_values;
 	}
-
-	if (property->flags & DRM_MODE_PROP_BLOB) {
+	else 	if (property->flags & DRM_MODE_PROP_BLOB) {
 		//TODO::
+		out_resp->count_enum_blobs = count_values;
 	}
 
-	return 0;
-}
-
-static int sprd_drm_mode_get_obj_properties(int fd, void *arg)
-{
-	struct drm_mode_obj_get_properties * get_prop = (struct drm_mode_obj_get_properties *)arg;
-	struct sprd_drm_property **props = NULL;
-	uint32_t count, i;
-	uint32_t * out_props_id;
-	uint64_t * out_values;
-
-	count = sprd_drm_resource_prop_list_get(get_prop->obj_id, &props);
-
-	if (get_prop->count_props == count) {
-		out_props_id = U642INTPTR(get_prop->props_ptr);
-		out_values = (uint64_t*) U642VOID(get_prop->prop_values_ptr);
-		for (i = 0; i < count; i++) {
-			out_props_id[i] = props[i]->id;
-			out_values[i] = props[i]->prop_get(props[i], get_prop->obj_id);
-		}
-	}
-	get_prop->count_props = count;
+	out_resp->count_values = count_values;
 
 	return 0;
 }
