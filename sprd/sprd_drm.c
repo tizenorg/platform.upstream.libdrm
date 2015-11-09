@@ -42,7 +42,11 @@
 
 #include <linux/stddef.h>
 #include <linux/fb.h>
+#ifdef USE_KERNEL_SPRD_HEADER_FILE
 #include <video/sprd_fb.h>
+#else
+#include "sprdfb.h"
+#endif
 
 #include "xf86drm.h"
 #include "xf86drmMode.h"
@@ -54,6 +58,8 @@
 #define U642VOID(x) ((void *)(unsigned long)(x))
 #define U642INTPTR(x) ( (unsigned int*) U642VOID(x) )
 #define VOID2U64(x) ((uint64_t)(unsigned long)(x))
+
+#define ALIGN(_v, _d) (((_v) + ((_d) - 1)) & ~((_d) - 1))
 
 #define SPRD_DEBUG_MSG 1
 
@@ -71,10 +77,11 @@
 //#define FB_DEV_HDMI "/dev/fb1"
 //#define FB_DEV_WB   "/dev/fb2"
 
+
 #define  MAX_CRTC		1
 #define  MAX_PLANE		2
 #define  MAX_CONNECTOR	1
-#define  DEFAULT_ZPOZ	SPRD_LAYERS_OSD
+#define  DEFAULT_ZPOZ	SPRD_LAYER_OSD
 
 #define DRM_PROP_NAME_LEN	32
 
@@ -860,48 +867,50 @@ static int sprd_drm_connector_enable(struct sprd_drm_mode_connector * conn)
 static int sprd_drm_connector_overlay_set(struct sprd_drm_mode_connector * conn,
 		int x, int y, int w, int h, struct sprd_drm_framebuffer *fb, int zpos) {
 
-    struct overlay_setting ovs = {0,};
-    struct overlay_display_setting ds = {0,};
+    overlay_info ovi;
+    overlay_display ov_disp;
 
-    ovs.layer_index = zpos;
+    ovi.layer_index = zpos;
 
 	if (fb) {
 
 		sprd_drm_connector_enable(conn);
 
 		//TODO:: support different formats
-		ovs.data_type = SPRD_DATA_FORMAT_RGB888;
-		ovs.y_endian = SPRD_DATA_ENDIAN_B0B1B2B3;
-		ovs.uv_endian = SPRD_DATA_ENDIAN_B0B1B2B3;
-		ovs.v_endian = SPRD_DATA_ENDIAN_B0B1B2B3;
-		ovs.rb_switch = 0;
+		ovi.data_type = SPRD_DATA_FORMAT_RGB888;
+		ovi.endian.y = SPRD_DATA_ENDIAN_B0B1B2B3;
+		ovi.endian.u = SPRD_DATA_ENDIAN_B0B1B2B3;
+		ovi.endian.v = SPRD_DATA_ENDIAN_B0B1B2B3;
+		ovi.rb_switch = 0;
 
-		//TODO:: I am not sure
-		ovs.rect.x = x;
-		ovs.rect.y = y;
-		ovs.rect.w = w;
-		ovs.rect.h = h;
+		ovi.size.hsize = ALIGN(fb->pitches[0],128) / 4;
+		ovi.size.vsize = fb->height;
 
-		ds.display_mode = SPRD_DISPLAY_OVERLAY_ASYNC;
-		ds.layer_index = ovs.layer_index;
-		if (ovs.layer_index == SPRD_LAYERS_OSD) {
-			ds.osd_handle = fb->names[0];
+		ovi.rect.x = x;
+		ovi.rect.y = y;
+		ovi.rect.w = w;
+		ovi.rect.h = h;
+
+		ov_disp.display_mode = SPRD_DISPLAY_OVERLAY_ASYNC;
+		ov_disp.layer_index = ovi.layer_index;
+		if (ovi.layer_index == SPRD_LAYER_OSD) {
+			ov_disp.osd_handle = fb->names[0];
 		} else {
-			ds.img_handle = fb->names[0];
+			ov_disp.img_handle = fb->names[0];
 		}
 
-		SPRD_DRM_DEBUG("SPRD_FB_SET_OVERLAY(%d) %dx%d+%d+%d\n", ovs.layer_index,x,y,w,h);
-		if (ioctl(conn->fb_fd, SPRD_FB_SET_OVERLAY, &ovs) == -1) {
+		SPRD_DRM_DEBUG("SPRD_FB_SET_OVERLAY(%d) rect:%dx%d+%d+%d size:%dx%d\n", ovi.layer_index, w, h, x, y, ovi.size.hsize, ovi.size.vsize);
+		if (ioctl(conn->fb_fd, SPRD_FB_SET_OVERLAY, &ovi) == -1) {
 			SPRD_DRM_ERROR( "error:%s Unable to set overlay: SPRD_FB_SET_OVERLAY\n",
 					strerror (errno));
 			return -EACCES;
 		}
 
 		//commit last setting immediately
-		SPRD_DRM_DEBUG("SPRD_FB_DISPLAY_OVERLAY(%d) osd_handle:%d img_handle:%d\n", ds.layer_index, ds.osd_handle, ds.img_handle);
-		if (ioctl(conn->fb_fd, SPRD_FB_DISPLAY_OVERLAY, &ds) == -1) {
+		SPRD_DRM_DEBUG("SPRD_FB_DISPLAY_OVERLAY(%d) osd_handle:%d img_handle:%d\n", ov_disp.layer_index, ov_disp.osd_handle, ov_disp.img_handle);
+		if (ioctl(conn->fb_fd, SPRD_FB_DISPLAY_OVERLAY, &ov_disp) == -1) {
 			SPRD_DRM_ERROR( "error:%s Unable to SPRD_FB_DISPLAY_OVERLAY layer %d\n",
-					strerror (errno), ds.layer_index);
+					strerror (errno), ov_disp.layer_index);
 			return -EACCES;
 		}
 
