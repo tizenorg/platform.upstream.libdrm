@@ -11,7 +11,6 @@ Source1001:		%name.manifest
 BuildRequires:  kernel-headers
 BuildRequires:  pkgconfig(pciaccess)
 BuildRequires:  pkgconfig(pthread-stubs)
-BuildRequires:  kernel-headers-tizen-dev
 
 %description
 Direct Rendering Manager headers and kernel modules.
@@ -106,6 +105,7 @@ rm -f %{buildroot}%{_bindir}/kmstest
 %manifest %{name}.manifest
 %{_libdir}/libdrm.so.*
 %{_libdir}/libdrm_exynos.so.*
+%{_libdir}/libdrm_sprd.so.*
 %{_libdir}/libdrm_vigs.so.*
 
 %files tools
