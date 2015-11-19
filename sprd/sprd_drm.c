@@ -96,8 +96,6 @@
 #define DRM_MODE_PROP_BITMASK	(1<<5) /* bitmask of enumerated types */
 
 struct sprd_drm_device;
-
-
 struct sprd_drm_mode_mode {
 
 	struct drm_mode_modeinfo drm_mode;
@@ -277,6 +275,7 @@ struct sprd_drm_framebuffer {
 
 };
 
+static struct sprd_drm_device * saved_dev;
 /*
 * @devices: list of drm device. the system may have more then one video card.
 */
@@ -1785,7 +1784,9 @@ struct sprd_drm_device * sprd_device_create(int fd)
 	struct sprd_drm_mode_encoder *enc;
 	uint32_t possible_crtcs;
 	int i;
-
+	if (saved_dev) {
+		return saved_dev;
+	}
 	dev = drmMalloc(sizeof(struct sprd_drm_device));
 	if (!dev) {
 		fprintf(stderr, "failed to create device[%s].\n",
@@ -1835,7 +1836,7 @@ struct sprd_drm_device * sprd_device_create(int fd)
 
 err:
 
-	return 0;
+	return NULL;
 }
 
 
@@ -1851,5 +1852,35 @@ void sprd_device_destroy(struct sprd_drm_device *dev)
 	free(dev);
 }
 
-
+int init_func (const char* desire_name)
+{
+	if (saved_dev)
+		return saved_dev->drm_fd;
+	if (strcmp(desire_name, "sprd")) {
+		SPRD_DRM_ERROR("Don't support %s drm\n", desire_name);
+		return -1;
+	}
+	int fd;
+	if ((fd = drmOpen("sprd", NULL)) < 0) {
+		SPRD_DRM_ERROR("Can't open sprd drm device\n");
+		return -1;
+	}
+	if ((saved_dev = sprd_device_create(fd)) == NULL) {
+		drmClose(fd);
+		return -1;
+	}
+	return fd;
+}
+/*
+ * Destroy sprd drm device object
+ *
+ * @dev: sprd drm device object.
+ */
+void close_func(void)
+{
+// TODO: Clear func;
+	if (saved_dev)
+		sprd_device_destroy(saved_dev);
+	saved_dev = NULL;
+}
 

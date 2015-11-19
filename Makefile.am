@@ -74,6 +74,12 @@ AM_CFLAGS = \
 
 libdrm_la_SOURCES = $(LIBDRM_FILES)
 
+if HAVE_LOADER
+libdrm_la_SOURCES += loader/loader.c
+libdrm_la_CPPFLAGS += -I$(top_srcdir)/loader
+libdrm_la_LDFLAGS += -ldl
+endif
+
 libdrmincludedir = ${includedir}
 libdrminclude_HEADERS = $(LIBDRM_H_FILES)
 

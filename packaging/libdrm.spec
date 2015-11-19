@@ -74,6 +74,7 @@ cp %{SOURCE1001} .
         --enable-exynos-experimental-api \
 		--enable-sprd-experimental-api \
 		--enable-install-test-programs \
+		--enable-loader-experimental\
         --disable-cairo-tests
 
 %__make %{?_smp_mflags}

@@ -51,6 +51,10 @@
 #include <sys/time.h>
 #include <stdarg.h>
 
+#ifdef HAVE_LOADER
+#include "loader/loader.h"
+#endif
+
 /* Not all systems have MAP_FAILED defined */
 #ifndef MAP_FAILED
 #define MAP_FAILED ((void *)-1)
@@ -634,7 +638,12 @@ static int drmOpenByName(const char *name)
  */
 int drmOpen(const char *name, const char *busid)
 {
-    if (!drmAvailable() && name != NULL && drm_server_info) {
+#ifdef HAVE_LOADER
+	int drm_fd = 0;
+	if ((drm_fd = loader_load_module(name,busid)) > 0)
+		return drm_fd;
+#endif
+	if (!drmAvailable() && name != NULL && drm_server_info) {
 	/* try to load the kernel */
 	if (!drm_server_info->load_module(name)) {
 	    drmMsg("[drm] failed to load kernel module \"%s\"\n", name);
