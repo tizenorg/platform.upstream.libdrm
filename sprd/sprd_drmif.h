@@ -28,11 +28,17 @@
 #define _SPRD_DRMIF_H_
 
 struct sprd_drm_device;
+struct sprd_drm_vendor_event_data;
+typedef int (*sprd_drm_vendor_event_handler)(struct drm_event *event);
 
 /*
  * device related functions:
  */
 struct sprd_drm_device * sprd_device_create(int fd);
 void sprd_device_destroy(struct sprd_drm_device *dev);
+struct sprd_drm_device * sprd_device_get(void);
+
+int sprd_device_add_vendor_event_handler(struct sprd_drm_device *dev,
+                                         sprd_drm_vendor_event_handler handler);
 
 #endif /* _SPRD_DRMIF_H_ */

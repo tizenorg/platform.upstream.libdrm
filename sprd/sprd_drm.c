@@ -97,6 +97,10 @@
 
 struct sprd_drm_device;
 
+struct sprd_drm_vendor_event_data {
+	sprd_drm_vendor_event_handler handler;
+	drmMMListHead link;
+};
 
 struct sprd_drm_mode_mode {
 
@@ -237,6 +241,8 @@ struct sprd_drm_device {
 	drmMMListHead crtc_list;
 
 	drmMMListHead property_list;
+
+	drmMMListHead handler_list;
 
 	struct sprd_drm_property *dpms_prop;
 
@@ -1724,6 +1730,19 @@ static int sprd_drm_handle_event(int fd, drmEventContextPtr evctx)
 			}
 			drmFree(sprd_event);
 		}
+		else {
+			struct sprd_drm_vendor_event_data *data;
+			int ret = -1;
+
+			DRMLISTFOREACHENTRY(data, &dev->handler_list, link) {
+				if (data->handler)
+				{
+					ret = data->handler(e);
+					if (ret == 0)
+						break;
+				}
+			}
+		}
 		i += e->length;
 	}
 
@@ -1757,6 +1776,8 @@ struct _ioctl_hook _ioctl_hooks[] = {
 		DRM_IOCTL_WAIT_VBLANK,				sprd_drm_wait_vblank
 };
 
+struct sprd_drm_device *g_dev;
+
 static int sprd_ioctl_hook(int fd, unsigned long request, void *arg)
 {
     uint32_t i;
@@ -1786,6 +1807,12 @@ struct sprd_drm_device * sprd_device_create(int fd)
 	uint32_t possible_crtcs;
 	int i;
 
+	if (g_dev)
+	{
+		fprintf(stderr, "global sprd drm device exists\n");
+		return NULL;
+	}
+
 	dev = drmMalloc(sizeof(struct sprd_drm_device));
 	if (!dev) {
 		fprintf(stderr, "failed to create device[%s].\n",
@@ -1805,6 +1832,7 @@ struct sprd_drm_device * sprd_device_create(int fd)
 	DRMINITLISTHEAD(&dev->fb_list);
 	DRMINITLISTHEAD(&dev->plane_list);
 	DRMINITLISTHEAD(&dev->property_list);
+	DRMINITLISTHEAD(&dev->handler_list);
 	/*
 	 * SPRD7730 is enough to have two CRTCs and each crtc would be used
 	 * without dependency of hardware.
@@ -1831,6 +1859,8 @@ struct sprd_drm_device * sprd_device_create(int fd)
 
 	DRMLISTADDTAIL(&dev->link, &devices);
 
+	g_dev = dev;
+
 	return dev;
 
 err:
@@ -1849,7 +1879,20 @@ void sprd_device_destroy(struct sprd_drm_device *dev)
 	//TODO::
 
 	free(dev);
+	g_dev = NULL;
 }
 
+int sprd_device_add_vendor_event_handler(struct sprd_drm_device *dev,
+                                         sprd_drm_vendor_event_handler handler)
+{
+	struct sprd_drm_vendor_event_data *data;
 
+	data = malloc(sizeof data);
+	if (!data)
+		return -1;
 
+	data->handler = handler;
+	DRMLISTADDTAIL(&data->link, &dev->handler_list);
+
+	return 0;
+}
