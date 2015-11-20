@@ -743,7 +743,7 @@ static struct sprd_drm_mode_encoder * sprd_drm_encoder_create(struct sprd_drm_de
 
 	enc = drmMalloc(sizeof (struct sprd_drm_mode_encoder));
 	enc->drm_encoder.encoder_id = sprd_drm_resource_new_id(enc);
-	enc->drm_encoder.crtc_id = 0;
+	enc->drm_encoder.crtc_id = 1;
 	enc->drm_encoder.encoder_type = encoder_type;
 	enc->drm_encoder.possible_crtcs = (1 << MAX_CRTC) - 1;  //can be connected with any crct
 	enc->drm_encoder.possible_clones = 0x00; //no clones
