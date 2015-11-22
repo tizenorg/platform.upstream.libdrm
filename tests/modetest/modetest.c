@@ -1559,6 +1559,12 @@ int main(int argc, char **argv)
 		}
 	}
 
+    if (drmSetClientCap(dev.fd, DRM_CLIENT_CAP_UNIVERSAL_PLANES, 1) < 0)
+    {
+        fprintf(stderr, "set ClietCap failed: %m\n");
+		return -1;
+    }
+
 	if (test_vsync && !page_flipping_supported()) {
 		fprintf(stderr, "page flipping not supported by drm.\n");
 		return -1;
