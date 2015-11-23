@@ -42,11 +42,7 @@
 
 #include <linux/stddef.h>
 #include <linux/fb.h>
-#ifdef USE_KERNEL_SPRD_HEADER_FILE
-#include <video/sprd_fb.h>
-#else
-#include "sprdfb.h"
-#endif
+#include <video/sprdfb.h>
 
 #include "xf86drm.h"
 #include "xf86drmMode.h"
