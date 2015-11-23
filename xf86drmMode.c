@@ -841,6 +841,7 @@ int drmModeCrtcSetGamma(int fd, uint32_t crtc_id, uint32_t size,
 	return DRM_IOCTL(fd, DRM_IOCTL_MODE_SETGAMMA, &l);
 }
 
+#ifdef HAVE_SPRD
 static handle_event_hook handleEventHook = NULL;
 
 int drmHandleEventSetHook(handle_event_hook hook)
@@ -848,6 +849,7 @@ int drmHandleEventSetHook(handle_event_hook hook)
 	handleEventHook = hook;
 	return 0;
 }
+#endif
 
 int drmHandleEvent(int fd, drmEventContextPtr evctx)
 {
@@ -858,10 +860,13 @@ int drmHandleEvent(int fd, drmEventContextPtr evctx)
 	
 	/* The DRM read semantics guarantees that we always get only
 	 * complete events. */
+
+#ifdef HAVE_SPRD
 	if(handleEventHook) {
 		if (handleEventHook(fd, evctx) == 0)
 			return 0;
 	}
+#endif
 
 	len = read(fd, buffer, sizeof buffer);
 	if (len == 0)
