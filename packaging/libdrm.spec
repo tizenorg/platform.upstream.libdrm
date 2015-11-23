@@ -8,9 +8,10 @@ Group:          Graphics & UI Framework/Libraries
 Source0:        %{name}-%{version}.tar.bz2
 Source1001:		%name.manifest
 
-BuildRequires:  kernel-headers
 BuildRequires:  pkgconfig(pciaccess)
 BuildRequires:  pkgconfig(pthread-stubs)
+BuildRequires:  kernel-headers-tizen-dev
+BuildConflicts:  linux-glibc-devel
 
 %description
 Direct Rendering Manager headers and kernel modules.
