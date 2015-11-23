@@ -162,16 +162,21 @@ void drmFree(void *pt)
 /**
  * Call ioctl, restarting if it is interupted
  */
+
+#ifdef HAVE_SPRD
 static ioctl_hook fp_ioctl_hook;
+#endif
 
 int
 drmIoctl(int fd, unsigned long request, void *arg)
 {
     int	ret;
 
+#ifdef HAVE_SPRD
     if (fp_ioctl_hook){
         return fp_ioctl_hook(fd, request, arg);
     }
+#endif
     
     do {
 	ret = ioctl(fd, request, arg);
@@ -179,12 +184,14 @@ drmIoctl(int fd, unsigned long request, void *arg)
     return ret;
 }
 
+#ifdef HAVE_SPRD
 int
 drmIoctlSetHook(ioctl_hook hook)
 {
     fp_ioctl_hook = hook;
     return 0;
 }
+#endif
 
 static unsigned long drmGetKeyFromFd(int fd)
 {

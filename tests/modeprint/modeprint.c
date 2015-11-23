@@ -412,8 +412,10 @@ int main(int argc, char **argv)
 		return 1;
 	}
 
+#ifdef HAVE_SPRD
 	if (strcmp(module_name,"sprd") == 0)
 		sprd_device_create(fd);
+#endif
 
 	res = drmModeGetResources(fd);
 	if (res == 0) {
