@@ -874,7 +874,7 @@ static void sprd_drm_connector_set_property(struct sprd_drm_property *prop, uint
 	struct sprd_drm_mode_connector * conn = sprd_drm_resource_get(obj_id);
 	if (conn) {
 		if (strcmp(prop->name, "DPMS") == 0) {
-			if (val == 0)
+			if (val == DRM_MODE_DPMS_OFF)
 				sprd_drm_connector_disable(conn);
 			else
 				sprd_drm_connector_enable(conn);
