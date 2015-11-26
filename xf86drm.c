@@ -177,9 +177,8 @@ drmIoctl(int fd, unsigned long request, void *arg)
         return fp_ioctl_hook(fd, request, arg);
     }
 #endif
-    
     do {
-	ret = ioctl(fd, request, arg);
+       ret = ioctl(fd, request, arg);
     } while (ret == -1 && (errno == EINTR || errno == EAGAIN));
     return ret;
 }

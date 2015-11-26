@@ -735,6 +735,13 @@ typedef struct _drmEventContext {
 
 extern int drmHandleEvent(int fd, drmEventContextPtr evctx);
 
+#define TIZEN_USE_USER_HANDLER
+#ifdef TIZEN_USE_USER_HANDLER
+typedef int (*drm_user_handler)(struct drm_event *event);
+extern int drmAddUserHandler(int fd, drm_user_handler handler);
+extern void drmRemoveUserHandler(int fd, drm_user_handler handler);
+#endif
+
 extern char *drmGetDeviceNameFromFd(int fd);
 
 extern int drmPrimeHandleToFD(int fd, uint32_t handle, uint32_t flags, int *prime_fd);
