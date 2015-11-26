@@ -81,6 +81,7 @@ cp %{SOURCE1001} .
 		--enable-sprd-experimental-api \
 %endif
 		--enable-install-test-programs \
+		--enable-loader-experimental \
         --disable-cairo-tests
 
 %__make %{?_smp_mflags}

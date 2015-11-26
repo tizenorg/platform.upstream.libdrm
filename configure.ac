@@ -112,6 +112,10 @@ AC_ARG_ENABLE(sprd-experimental-api,
 	      AS_HELP_STRING([--enable-sprd-experimental-api],
 	      [Enable support for SPRD's experimental API (default: disabled)]),
 	      [SPRD=$enableval], [SPRD=no])
+AC_ARG_ENABLE(loader-experimental,
+	      AS_HELP_STRING([--enable-loader-experimental],
+	     [Enable drm device lib loader)]),
+	     [LOADER=$enableval], [LOADER=no])
 dnl ===========================================================================
 dnl check compiler flags
 AC_DEFUN([LIBDRM_CC_TRY_FLAG], [
@@ -457,6 +461,11 @@ if test "x$have_valgrind" = "xyes"; then
 	AC_DEFINE([HAVE_VALGRIND], 1, [Use valgrind intrinsics to suppress false warnings])
 fi
 
+AM_CONDITIONAL(HAVE_LOADER, [test "x$LOADER" = "xyes"])
+if test "x$LOADER" = "xyes"; then
+	AC_DEFINE(HAVE_LOADER, 1, [Have dynamic lib load support])
+fi
+
 AM_CONDITIONAL(HAVE_INTEL, [test "x$INTEL" != "xno"])
 AM_CONDITIONAL(HAVE_RADEON, [test "x$RADEON" != "xno"])
 AM_CONDITIONAL(HAVE_NOUVEAU, [test "x$NOUVEAU" != "xno"])
@@ -539,5 +548,6 @@ echo "  EXYNOS API     $EXYNOS"
 echo "  Freedreno API  $FREEDRENO"
 echo "  VIGS API       $VIGS"
 echo "  SPRD API       $SPRD"
+echo "  LOADER         $LOADER"
 
 echo ""
