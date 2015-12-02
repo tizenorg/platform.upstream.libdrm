@@ -962,8 +962,10 @@ int drmHandleEvent(int fd, drmEventContextPtr evctx)
 			{
 				struct drm_user_handler_data *data;
 				int ret = -1;
+				if (!user_handler_list_init)
+					break;
 				DRMLISTFOREACHENTRY(data, &user_handler_list, link) {
-					if (data->fd == fd && data->handler)
+					if (data->handler)
 					{
 						ret = data->handler(e);
 						if (ret == 0)
