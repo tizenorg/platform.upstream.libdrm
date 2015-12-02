@@ -940,7 +940,7 @@ static int sprd_drm_connector_overlay_set(struct sprd_drm_mode_connector * conn,
 		ovi.endian.v = SPRD_DATA_ENDIAN_B0B1B2B3;
 		ovi.rb_switch = 0;
 
-		ovi.size.hsize = ALIGN(fb->pitches[0],128) / 4;
+		ovi.size.hsize = fb->pitches[0] / 4;
 		ovi.size.vsize = fb->height;
 
 		ovi.rect.x = x;
