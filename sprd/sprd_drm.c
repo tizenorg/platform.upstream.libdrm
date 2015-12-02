@@ -1845,10 +1845,18 @@ err:
  */
 void sprd_device_destroy(struct sprd_drm_device *dev)
 {
+
+	//clear hooks
+	drmIoctlSetHook(NULL);
+	drmHandleEventSetHook(NULL);
+
 	//TODO::
+	//removing all resource,
+	//disabling overlay and connectors
 
 	DRMLISTDEL(&dev->link);
 
+	DRMINITLISTHEAD(&(devices));
 	free(dev);
 }
 
