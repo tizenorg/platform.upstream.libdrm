@@ -1381,9 +1381,6 @@ static int sprd_drm_mode_set_crtc(int fd, void *arg)
 	uint32_t i;
 	uint32_t * ids;
 
-    if (fd = -1)
-		return -EINVAL;
-
 	memset(&conns, 0, sizeof(conns[0]) * MAX_CONNECTOR);
 
 	dev = get_sprd_device(fd);
