@@ -279,9 +279,15 @@ struct sprd_drm_framebuffer {
 drmMMListHead devices = {&devices, &devices};
 
 /*
-* @resource_storage: storage for all recurces
+* @resource_storage: storage for all resources
 */
 static void * resource_storage = NULL;
+
+/*
+ * @next_id: a global id for a created resource.
+ * id starts from one.
+ */
+static int next_id = 1;
 
 static const uint32_t formats[] = {
 	DRM_FORMAT_RGB565,
@@ -302,18 +308,26 @@ struct sprd_drm_resource {
 
 struct sprd_drm_property * sprd_drm_create_dpms_prpoperty(struct sprd_drm_device * dev);
 
+
+/**
+ * Get new id and save @val into resource_storage;
+ * ATTENSION: The capacity of a drm hash table is only 100.
+ */
 static int sprd_drm_resource_new_id(void * val)
 {
-	static int next_id = 0;
 	struct sprd_drm_resource * res;
+	int id = next_id;
 	res = drmMalloc(sizeof(struct sprd_drm_resource));
 	res->val = val;
 	if (!resource_storage)
 		resource_storage = drmHashCreate();
 
-	drmHashInsert(resource_storage, ++next_id, res);
+	drmHashInsert(resource_storage, next_id, res);
 
-	return next_id;
+	/* Find the next first id which isn't exist in the table */
+	while(!drmHashLookup(resource_storage, ++next_id, &res));
+
+	return id;
 }
 
 static void * sprd_drm_resource_get(int id)
@@ -339,6 +353,13 @@ static void sprd_drm_resource_del(int id)
 	drmHashDelete(resource_storage, id);
 	drmFree(res->propertys);
 	drmFree(res);
+	/*
+	 * If the deleted id less than "next_id" then "next_id" is set to the deleted id.
+	 * In this way this id can be used again.
+	 */
+	if (id < next_id) {
+		next_id = id;
+	}
 }
 
 static void sprd_drm_resource_prop_add(int id, void * prop)
@@ -421,6 +442,40 @@ static uint32_t sprd_drm_legacy_fb_format(uint32_t bpp, uint32_t depth)
 	}
 
 	return fmt;
+}
+
+
+/**
+ * from kernel
+ *
+ * drm_format_num_planes - get the number of planes for format
+ * @format: pixel format (DRM_FORMAT_*)
+ *
+ * RETURNS:
+ * The number of planes used by the specified pixel format.
+ */
+int sprd_drm_format_num_planes(uint32_t format)
+{
+	switch (format) {
+	case DRM_FORMAT_YUV410:
+	case DRM_FORMAT_YVU410:
+	case DRM_FORMAT_YUV411:
+	case DRM_FORMAT_YVU411:
+	case DRM_FORMAT_YUV420:
+	case DRM_FORMAT_YVU420:
+	case DRM_FORMAT_YUV422:
+	case DRM_FORMAT_YVU422:
+	case DRM_FORMAT_YUV444:
+	case DRM_FORMAT_YVU444:
+		return 3;
+	case DRM_FORMAT_NV12:
+	case DRM_FORMAT_NV21:
+	case DRM_FORMAT_NV16:
+	case DRM_FORMAT_NV61:
+		return 2;
+	default:
+		return 1;
+	}
 }
 
 /*
@@ -616,15 +671,14 @@ static void sprd_drm_mode_connector_update_from_frame_buffer(struct sprd_drm_mod
 /*
  * Get a gem global object name from a gem object handle
  *
- * @fd: file descriptor of drm device
- * @handle: a gem object handle
+ * @fd[in] 		file descriptor of drm device
+ * @handle[in] 	a gem object handle
+ * @name[out] 	drm fling
  *
  * This interface is used to get a gem global object name from a gem object
  * handle to a buffer that wants to share it with another process
- *
- * If true, return gem global object name(positive) else 0
  */
-static int sprd_drm_get_name(uint32_t fd, uint32_t handle)
+static int sprd_drm_get_name(uint32_t fd, uint32_t handle, uint32_t * name)
 {
 	struct drm_gem_flink arg;
 	int ret;
@@ -637,11 +691,12 @@ static int sprd_drm_get_name(uint32_t fd, uint32_t handle)
 
 	ret = drmIoctl(fd, DRM_IOCTL_GEM_FLINK, &arg);
 	if (ret) {
-		SPRD_DRM_ERROR("failed to get gem global name[%s]\n", strerror_r(errno, strErroBuf, 256));
+		SPRD_DRM_ERROR("failed to get gem global name for handle:%d [%d:%s]\n", handle, ret, strerror_r(errno, strErroBuf, 256));
 		return ret;
 	}
+	*name = arg.name;
 
-	return arg.name;
+	return 0;
 }
 
 static int sprd_drm_connector_LCD_create(struct sprd_drm_device * dev, struct sprd_drm_mode_encoder * enc)
@@ -665,7 +720,7 @@ static int sprd_drm_connector_LCD_create(struct sprd_drm_device * dev, struct sp
 
 	conn->drm_conn.subpixel = DRM_MODE_SUBPIXEL_NONE;
 
-	DRMLISTADDTAIL(&conn->link, &dev->connector_list);
+	DRMLISTADD(&conn->link, &dev->connector_list);
 	dev->num_connector++;
 
 	conn->fb_fd_name = FB_DEV_LCD;
@@ -683,21 +738,26 @@ static int sprd_drm_connector_LCD_create(struct sprd_drm_device * dev, struct sp
 static int32_t sprd_drm_framebuffer_create(struct sprd_drm_device * dev, struct drm_mode_fb_cmd2 * fb_cmd)
 {
 	struct sprd_drm_framebuffer * fb = NULL;
-	int i;
-	int names[4];
+	int i, ret, num;
+	int names[4] = {0,0,0,0};
 
 
-	for (i = 0; i < 4; i++) {
-		names[i] = sprd_drm_get_name(dev->drm_fd, fb_cmd->handles[i]);
-		if (names[i] == 0)
-			return -EACCES;
+	num = sprd_drm_format_num_planes(fb_cmd->pixel_format);
+	for (i = 0; i <= num; i++) {
+		if( fb_cmd->handles[i] > 0) {
+			ret = sprd_drm_get_name(dev->drm_fd, fb_cmd->handles[i], &names[i]);
+			if (ret) {
+				SPRD_DRM_ERROR("framebuffer creating is failed: handle[%d]=%d is wrong\n", i, fb_cmd->handles[i]);
+				return ret;
+			}
+		}
 	}
 
 	fb = drmMalloc(sizeof (struct sprd_drm_framebuffer));
 	fb->id = sprd_drm_resource_new_id(fb);
 	fb->refcount = 1;
 	fb->dev = dev;
-	DRMLISTADDTAIL(&fb->link, &dev->crtc_list);
+	DRMLISTADD(&fb->link, &dev->fb_list);
 	dev->num_fb++;
 
 
@@ -724,12 +784,15 @@ static int  sprd_drm_framebuffer_remove(struct sprd_drm_framebuffer * fb)
 {
 	if (!fb) return -EINVAL;
 
-//	if (--fb->refcount) {
-//		sprd_drm_resource_del(fb->id);
-//		DRMLISTDEL(&fb->link);
-//		fb->dev->num_fb--;
-//		drmFree(fb);
-//	}
+	if (--fb->refcount == 0) {
+		SPRD_DRM_DEBUG("framebuffer remove: id:%d[%dx%d] c:%d n:%d h:%d\n",
+			fb->id, fb->width, fb->height, fb->refcount, fb->names[0], fb->handles[0]);
+		sprd_drm_resource_del(fb->id);
+		DRMLISTDEL(&fb->link);
+		fb->dev->num_fb--;
+		drmFree(fb);
+	}
+
 	return 0;
 }
 
@@ -744,7 +807,7 @@ static struct sprd_drm_mode_encoder * sprd_drm_encoder_create(struct sprd_drm_de
 	enc->drm_encoder.possible_crtcs = (1 << MAX_CRTC) - 1;  //can be connected with any crct
 	enc->drm_encoder.possible_clones = 0x00; //no clones
 
-	DRMLISTADDTAIL(&enc->link, &dev->encoder_list);
+	DRMLISTADD(&enc->link, &dev->encoder_list);
 	dev->num_encoder++;
 
 	return enc;
@@ -766,7 +829,7 @@ static struct sprd_drm_mode_crtc * sprd_drm_crtc_create(struct sprd_drm_device *
 
 	crtc->drm_crtc.gamma_size = 0;
 	crtc->drm_crtc.mode_valid = 0;
-	DRMLISTADDTAIL(&crtc->link, &dev->crtc_list);
+	DRMLISTADD(&crtc->link, &dev->crtc_list);
 	dev->num_crtc++;
 
 	return crtc;
@@ -809,7 +872,7 @@ static struct sprd_drm_property * sprd_drm_create_zpos_prpoperty(struct sprd_drm
 	prop->range_min = 0;
 	prop->range_max = MAX_PLANE - 1;
 
-	DRMLISTADDTAIL(&prop->head, &dev->property_list);
+	DRMLISTADD(&prop->head, &dev->property_list);
 
 	return prop;
 }
@@ -832,7 +895,7 @@ static struct sprd_drm_mode_plane *  sprd_drm_plane_create(struct sprd_drm_devic
 	plane->drm_plane.count_format_types = sizeof(formats)/sizeof(formats[0]) ;
 	plane->drm_plane.format_type_ptr = VOID2U64(formats);
 
-	DRMLISTADDTAIL(&plane->link, &dev->plane_list);
+	DRMLISTADD(&plane->link, &dev->plane_list);
 
 	dev->num_plane++;
 
@@ -915,7 +978,7 @@ struct sprd_drm_property * sprd_drm_create_dpms_prpoperty(struct sprd_drm_device
 	prop->num_values = sizeof(drm_dpms_enum_list)/sizeof(struct sprd_drm_prop_enum_list);
 	prop->enum_list = drm_dpms_enum_list;
 
-	DRMLISTADDTAIL(&prop->head, &dev->property_list);
+	DRMLISTADD(&prop->head, &dev->property_list);
 
 	return prop;
 }
@@ -1318,9 +1381,9 @@ static int sprd_drm_mode_set_plane(int fd, void *arg)
 		plane->need_update = 0;
 		if (plane->drm_plane.fb_id != fb->id) {
 			old_fb = sprd_drm_resource_get(plane->drm_plane.fb_id);
+			fb->refcount++;
 			sprd_drm_framebuffer_remove(old_fb);
 			plane->drm_plane.fb_id = fb->id;
-			fb->refcount++;
 		}
 		plane->crtc_x = plane_cmd->crtc_x;
 		plane->crtc_y = plane_cmd->crtc_y;
@@ -1500,8 +1563,8 @@ static int sprd_drm_mode_set_crtc(int fd, void *arg)
 			if (sprd_drm_connector_overlay_set(conns[i], crtc_cmd->x, crtc_cmd->y, fb->width, fb->height, fb, DEFAULT_ZPOZ) == 0) {
 				if(crtc->drm_crtc.fb_id != crtc_cmd->fb_id) {
 					old_fb = sprd_drm_resource_get(crtc->drm_crtc.fb_id);
-					sprd_drm_framebuffer_remove(old_fb);
 					fb->refcount++;
+					sprd_drm_framebuffer_remove(old_fb);
 				}
 			}
 			else {
@@ -1816,7 +1879,6 @@ struct sprd_drm_device * sprd_device_create(int fd)
 			goto err;
 	}
 
-
 	//LCD encoder + connector
 	enc = sprd_drm_encoder_create(dev, DRM_MODE_ENCODER_LVDS);
 	sprd_drm_connector_LCD_create(dev, enc);
@@ -1825,7 +1887,7 @@ struct sprd_drm_device * sprd_device_create(int fd)
 
 	//TODO: WB encoder + connector
 
-	DRMLISTADDTAIL(&dev->link, &devices);
+	DRMLISTADD(&dev->link, &devices);
 
 	return dev;
 
