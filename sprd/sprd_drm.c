@@ -910,7 +910,7 @@ static struct sprd_drm_property * sprd_drm_create_plane_type_prpoperty(struct sp
 	prop = drmMalloc(sizeof (struct sprd_drm_property));
 	prop->id = sprd_drm_resource_new_id(prop);
 	strcpy(prop->name, "type");
-	prop->flags = DRM_MODE_PROP_IMMUTABLE | DRM_MODE_PROP_ENUM;
+	prop->flags = DRM_MODE_PROP_ENUM;
 	prop->prop_set = sprd_drm_plane_set_property;
 	prop->prop_get = sprd_drm_plane_get_property;
 
@@ -931,7 +931,7 @@ static struct sprd_drm_property * sprd_drm_create_zpos_prpoperty(struct sprd_drm
 	prop = drmMalloc(sizeof (struct sprd_drm_property));
 	prop->id = sprd_drm_resource_new_id(prop);
 	strcpy(prop->name, "zpos");
-	prop->flags = DRM_MODE_PROP_IMMUTABLE | DRM_MODE_PROP_RANGE;
+	prop->flags = DRM_MODE_PROP_RANGE;
 	prop->prop_set = sprd_drm_plane_set_property;
 	prop->prop_get = sprd_drm_plane_get_property;
 
@@ -944,16 +944,15 @@ static struct sprd_drm_property * sprd_drm_create_zpos_prpoperty(struct sprd_drm
 	return prop;
 }
 
-static struct sprd_drm_mode_plane *  sprd_drm_plane_create(struct sprd_drm_device * dev, unsigned int possible_crtcs)
+static struct sprd_drm_mode_plane *  sprd_drm_plane_create(struct sprd_drm_device * dev, unsigned int possible_crtcs, int zpos)
 {
 	struct sprd_drm_mode_plane * plane;
 
 	plane = drmMalloc(sizeof (struct sprd_drm_mode_plane));
 	plane->drm_plane.plane_id = sprd_drm_resource_new_id(plane);
-
+	plane->zpos = zpos;
 	plane->drm_plane.crtc_id = 0;
 	plane->drm_plane.fb_id = 0;
-
 	plane->drm_plane.possible_crtcs = possible_crtcs;
 
 	//TODO::
@@ -1949,7 +1948,7 @@ struct sprd_drm_device * sprd_device_create(int fd)
 
 	possible_crtcs = (1 << MAX_CRTC) - 1;
 	for (i = 0; i < MAX_PLANE; i++) {
-		if (!sprd_drm_plane_create(dev, possible_crtcs))
+		if (!sprd_drm_plane_create(dev, possible_crtcs, i))
 			goto err;
 	}
 
