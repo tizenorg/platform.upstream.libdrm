@@ -82,6 +82,15 @@
 
 #define  ZPOS_TO_LYR_ID(zpos) ( zpos == 1 ? SPRD_LAYER_OSD : SPRD_LAYER_IMG)
 
+#define DRM_PLANE_TYPE_OVERLAY 0
+#define DRM_PLANE_TYPE_PRIMARY 1
+#define DRM_PLANE_TYPE_CUCSOR  2
+
+#define  ZPOS_TO_LYR_TYPE(zpos) ((zpos) == 1 ? DRM_PLANE_TYPE_PRIMARY :\
+								 (zpos) == 0 ? DRM_PLANE_TYPE_OVERLAY : -1)
+#define  LYR_TYPE_TO_ZPOS(type) ((type) ==  DRM_PLANE_TYPE_PRIMARY ? 1 :\
+								 (type) ==  DRM_PLANE_TYPE_CURSOR  ? 0 : -1)
+
 #define DRM_PROP_NAME_LEN	32
 
 #define DRM_MODE_PROP_PENDING	(1<<0)
@@ -185,7 +194,7 @@ struct sprd_drm_property {
 	//DRM_MODE_PROP_BLOB
 	drmMMListHead blob_list;
 
-	void 	 (*prop_set)(struct sprd_drm_property *prop, uint32_t obj_id, uint64_t val);
+	int32_t  (*prop_set)(struct sprd_drm_property *prop, uint32_t obj_id, uint64_t val);
 	uint64_t (*prop_get)(struct sprd_drm_property *prop, uint32_t obj_id);
 };
 
@@ -835,24 +844,82 @@ static struct sprd_drm_mode_crtc * sprd_drm_crtc_create(struct sprd_drm_device *
 	return crtc;
 }
 
-static void sprd_drm_plane_set_property(struct sprd_drm_property *prop, uint32_t obj_id, uint64_t val)
+static uint32_t _chack_zpos(uint32_t zpos)
 {
+	if (zpos == 0 || zpos == 1)
+		return 1;
+	return 0;
+}
+
+static int32_t sprd_drm_plane_set_property(struct sprd_drm_property *prop, uint32_t obj_id, uint64_t val)
+{
+	int zpos = 0;
 	struct sprd_drm_mode_plane * plane = sprd_drm_resource_get(obj_id);
-	if (plane) {
-		if (plane->zpos != (uint32_t)val) {
-			plane->need_update = 1;
-			plane->zpos = (uint32_t)val;
-		}
+
+	if (plane == NULL) {
+		return -EINVAL;
 	}
+	
+	if (strcmp(prop->name, "zpos") == 0) {
+		zpos = (uint32_t)val;
+	}
+	else if (strcmp(prop->name, "type") == 0) {
+		zpos = LYR_TYPE_TO_ZPOS(val);
+	}
+
+	if(!_chack_zpos(zpos)) {
+		return -EINVAL;
+	}
+	
+	if (plane->zpos != zpos) {
+		plane->need_update = 1;
+		plane->zpos = zpos;
+	}
+	return 0;
 }
 
 static uint64_t sprd_drm_plane_get_property(struct sprd_drm_property *prop, uint32_t obj_id)
 {
 	struct sprd_drm_mode_plane * plane = sprd_drm_resource_get(obj_id);
-	if (plane) {
-		return (uint64_t)plane->zpos;
+	if (strcmp(prop->name, "zpos") == 0) {
+		if (plane) {
+			return (uint64_t)plane->zpos;
+		}
+		return DEFAULT_ZPOZ;
 	}
-	return DEFAULT_ZPOZ;
+	else if (strcmp(prop->name, "type") == 0) {
+		if (plane) {
+			return (uint64_t)ZPOS_TO_LYR_TYPE(plane->zpos);
+		}
+		return (uint64_t)ZPOS_TO_LYR_TYPE(DEFAULT_ZPOZ);
+	}
+	return 0;
+}
+
+static struct sprd_drm_prop_enum_list drm_plane_type_enum_list[] =
+{	{ 0, "Overlay" },
+	{ 1, "Primary" },
+	{ 2, "Cursor" },
+};
+
+static struct sprd_drm_property * sprd_drm_create_plane_type_prpoperty(struct sprd_drm_device * dev)
+{
+
+	struct sprd_drm_property * prop;
+
+	prop = drmMalloc(sizeof (struct sprd_drm_property));
+	prop->id = sprd_drm_resource_new_id(prop);
+	strcpy(prop->name, "type");
+	prop->flags = DRM_MODE_PROP_ENUM;
+	prop->prop_set = sprd_drm_plane_set_property;
+	prop->prop_get = sprd_drm_plane_get_property;
+
+	prop->num_values = sizeof(drm_plane_type_enum_list)/sizeof(struct sprd_drm_prop_enum_list);
+	prop->enum_list = drm_plane_type_enum_list;
+
+	DRMLISTADD(&prop->head, &dev->property_list);
+
+	return prop;
 }
 
 
@@ -864,7 +931,7 @@ static struct sprd_drm_property * sprd_drm_create_zpos_prpoperty(struct sprd_drm
 	prop = drmMalloc(sizeof (struct sprd_drm_property));
 	prop->id = sprd_drm_resource_new_id(prop);
 	strcpy(prop->name, "zpos");
-	prop->flags = DRM_MODE_PROP_IMMUTABLE | DRM_MODE_PROP_RANGE;
+	prop->flags = DRM_MODE_PROP_RANGE;
 	prop->prop_set = sprd_drm_plane_set_property;
 	prop->prop_get = sprd_drm_plane_get_property;
 
@@ -877,16 +944,15 @@ static struct sprd_drm_property * sprd_drm_create_zpos_prpoperty(struct sprd_drm
 	return prop;
 }
 
-static struct sprd_drm_mode_plane *  sprd_drm_plane_create(struct sprd_drm_device * dev, unsigned int possible_crtcs)
+static struct sprd_drm_mode_plane *  sprd_drm_plane_create(struct sprd_drm_device * dev, unsigned int possible_crtcs, int zpos)
 {
 	struct sprd_drm_mode_plane * plane;
 
 	plane = drmMalloc(sizeof (struct sprd_drm_mode_plane));
 	plane->drm_plane.plane_id = sprd_drm_resource_new_id(plane);
-
+	plane->zpos = zpos;
 	plane->drm_plane.crtc_id = 0;
 	plane->drm_plane.fb_id = 0;
-
 	plane->drm_plane.possible_crtcs = possible_crtcs;
 
 	//TODO::
@@ -904,6 +970,11 @@ static struct sprd_drm_mode_plane *  sprd_drm_plane_create(struct sprd_drm_devic
 		zpos_prop = sprd_drm_create_zpos_prpoperty(dev);
 
 	sprd_drm_resource_prop_add(plane->drm_plane.plane_id, zpos_prop);
+
+	static struct sprd_drm_property *type_prop = NULL;
+	if (!type_prop)
+		type_prop = sprd_drm_create_plane_type_prpoperty(dev);
+	sprd_drm_resource_prop_add(plane->drm_plane.plane_id, type_prop);
 
 	return plane;
 }
@@ -932,7 +1003,7 @@ static int sprd_drm_connector_enable(struct sprd_drm_mode_connector * conn)
 	return 0;
 }
 
-static void sprd_drm_connector_set_property(struct sprd_drm_property *prop, uint32_t obj_id, uint64_t val)
+static int32_t sprd_drm_connector_set_property(struct sprd_drm_property *prop, uint32_t obj_id, uint64_t val)
 {
 	struct sprd_drm_mode_connector * conn = sprd_drm_resource_get(obj_id);
 	if (conn) {
@@ -943,6 +1014,8 @@ static void sprd_drm_connector_set_property(struct sprd_drm_property *prop, uint
 				sprd_drm_connector_enable(conn);
 		}
 	}
+    
+	return 0;
 }
 
 static uint64_t sprd_drm_connector_get_property(struct sprd_drm_property *prop, uint32_t obj_id)
@@ -1313,12 +1386,13 @@ static int sprd_drm_mode_set_obj_property(int fd, void *arg)
 {
 	struct drm_mode_obj_set_property *set_prop = (struct drm_mode_obj_set_property *)arg;
 	struct sprd_drm_property *prop = NULL;
+	int res = -EINVAL;
 
 	prop = sprd_drm_resource_get(set_prop->prop_id);
 	if(prop)
-		prop->prop_set(prop, set_prop->obj_id, set_prop->value);
+		res = prop->prop_set(prop, set_prop->obj_id, set_prop->value);
 
-	return 0;
+	return res;
 }
 
 static int sprd_drm_mode_set_plane(int fd, void *arg)
@@ -1875,7 +1949,7 @@ struct sprd_drm_device * sprd_device_create(int fd)
 
 	possible_crtcs = (1 << MAX_CRTC) - 1;
 	for (i = 0; i < MAX_PLANE; i++) {
-		if (!sprd_drm_plane_create(dev, possible_crtcs))
+		if (!sprd_drm_plane_create(dev, possible_crtcs, i))
 			goto err;
 	}
 
