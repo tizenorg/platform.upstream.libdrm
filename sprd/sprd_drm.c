@@ -57,15 +57,15 @@
 
 #define ALIGN(_v, _d) (((_v) + ((_d) - 1)) & ~((_d) - 1))
 
-#define SPRD_DEBUG_MSG 1
+//#define SPRD_DEBUG_MSG 1
 
 #ifdef SPRD_DEBUG_MSG
 	#define SPRD_DRM_DEBUG(fmt, ...) printf(fmt, ##__VA_ARGS__)
-	#define SPRD_DRM_ERROR(fmt, ...) fprintf(stderr, fmt, ##__VA_ARGS__)
 #else
 	#define SPRD_DRM_DEBUG(fmt, ...)
-	#define SPRD_DRM_ERROR(fmt, ...)
 #endif
+
+#define SPRD_DRM_ERROR(fmt, ...) fprintf(stderr, fmt, ##__VA_ARGS__)
 
 
 #define FB_DEV_LCD  "/dev/fb0"
@@ -859,7 +859,7 @@ static int32_t sprd_drm_plane_set_property(struct sprd_drm_property *prop, uint3
 	if (plane == NULL) {
 		return -EINVAL;
 	}
-	
+
 	if (strcmp(prop->name, "zpos") == 0) {
 		zpos = (uint32_t)val;
 	}
@@ -870,7 +870,7 @@ static int32_t sprd_drm_plane_set_property(struct sprd_drm_property *prop, uint3
 	if(!_chack_zpos(zpos)) {
 		return -EINVAL;
 	}
-	
+
 	if (plane->zpos != zpos) {
 		plane->need_update = 1;
 		plane->zpos = zpos;
@@ -1014,7 +1014,7 @@ static int32_t sprd_drm_connector_set_property(struct sprd_drm_property *prop, u
 				sprd_drm_connector_enable(conn);
 		}
 	}
-    
+
 	return 0;
 }
 
