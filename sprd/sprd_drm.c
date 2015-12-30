@@ -1857,6 +1857,11 @@ static int sprd_drm_handle_event(int fd, drmEventContextPtr evctx)
 			}
 			drmFree(sprd_event);
 		}
+#ifdef TIZEN_USE_USER_HANDLER
+		else {
+			drmSendUserEvent(e);
+		}
+#endif
 		i += e->length;
 	}
 

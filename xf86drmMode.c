@@ -906,6 +906,22 @@ drmRemoveUserHandler(int fd, drm_user_handler handler)
 		}
 	}
 }
+
+void drmSendUserEvent(struct drm_event * e)
+{
+	struct drm_user_handler_data *data;
+	int ret = -1;
+	if (!user_handler_list_init)
+		return;
+
+	DRMLISTFOREACHENTRY(data, &user_handler_list, link) {
+		if (data->handler) {
+			ret = data->handler(e);
+			if (ret == 0)
+				return;
+		}
+	}
+}
 #endif
 
 int drmHandleEvent(int fd, drmEventContextPtr evctx)
@@ -960,18 +976,7 @@ int drmHandleEvent(int fd, drmEventContextPtr evctx)
 		default:
 #ifdef TIZEN_USE_USER_HANDLER
 			{
-				struct drm_user_handler_data *data;
-				int ret = -1;
-				if (!user_handler_list_init)
-					break;
-				DRMLISTFOREACHENTRY(data, &user_handler_list, link) {
-					if (data->handler)
-					{
-						ret = data->handler(e);
-						if (ret == 0)
-							break;
-					}
-				}
+			    drmSendUserEvent(e);
 			}
 #endif
 			break;

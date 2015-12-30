@@ -740,6 +740,7 @@ extern int drmHandleEvent(int fd, drmEventContextPtr evctx);
 typedef int (*drm_user_handler)(struct drm_event *event);
 extern int drmAddUserHandler(int fd, drm_user_handler handler);
 extern void drmRemoveUserHandler(int fd, drm_user_handler handler);
+extern void drmSendUserEvent(struct drm_event * e);
 #endif
 
 extern char *drmGetDeviceNameFromFd(int fd);
