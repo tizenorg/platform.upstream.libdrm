@@ -1062,6 +1062,8 @@ static int sprd_drm_connector_overlay_set(struct sprd_drm_mode_connector * conn,
 		int x, int y, int w, int h, struct sprd_drm_framebuffer *fb, int zpos) {
 
     overlay_info ovi;
+    overlay_info *prev_ovi;
+    static overlay_info prev_ovis[2];
     overlay_display ov_disp;
 
     ovi.layer_index = ZPOS_TO_LYR_ID(zpos);
@@ -1089,11 +1091,13 @@ static int sprd_drm_connector_overlay_set(struct sprd_drm_mode_connector * conn,
 		ov_disp.layer_index = ovi.layer_index;
 		if (ovi.layer_index == SPRD_LAYER_OSD) {
 			ov_disp.osd_handle = fb->names[0];
+			prev_ovi = &prev_ovis[1];
 		} else {
 			ov_disp.img_handle = fb->names[0];
+            prev_ovi = &prev_ovis[0];
 		}
 
-		if (!(conn->activated_layers & zpos))
+		if (!(conn->activated_layers & zpos) || memcmp (prev_ovi, &ovi, sizeof(overlay_info)) != 0)
 		{
 			SPRD_DRM_DEBUG("SPRD_FB_SET_OVERLAY(%d) rect:%dx%d+%d+%d size:%dx%d\n", ovi.layer_index, w, h, x, y, ovi.size.hsize, ovi.size.vsize);
 			if (ioctl(conn->fb_fd, SPRD_FB_SET_OVERLAY, &ovi) == -1) {
@@ -1101,6 +1105,7 @@ static int sprd_drm_connector_overlay_set(struct sprd_drm_mode_connector * conn,
 						strerror (errno));
 				return -EACCES;
 			}
+			memcpy (prev_ovi, &ovi, sizeof(overlay_info));
 		}
 
 		//commit last setting immediately
