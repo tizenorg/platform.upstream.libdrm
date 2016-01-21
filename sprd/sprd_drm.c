@@ -986,6 +986,7 @@ static int sprd_drm_connector_disable(struct sprd_drm_mode_connector * conn)
 		SPRD_DRM_ERROR("FB_BLANK_UNBLANK is failed.: %s\n", strerror (errno));
 		return -EACCES;
 	}
+	conn->activated_layers = 0;
 	return 0;
 }
 
