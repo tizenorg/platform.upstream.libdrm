@@ -1092,11 +1092,14 @@ static int sprd_drm_connector_overlay_set(struct sprd_drm_mode_connector * conn,
 			ov_disp.img_handle = fb->names[0];
 		}
 
-		SPRD_DRM_DEBUG("SPRD_FB_SET_OVERLAY(%d) rect:%dx%d+%d+%d size:%dx%d\n", ovi.layer_index, w, h, x, y, ovi.size.hsize, ovi.size.vsize);
-		if (ioctl(conn->fb_fd, SPRD_FB_SET_OVERLAY, &ovi) == -1) {
-			SPRD_DRM_ERROR( "error:%s Unable to set overlay: SPRD_FB_SET_OVERLAY\n",
-					strerror (errno));
-			return -EACCES;
+		if (!(conn->activated_layers & zpos))
+		{
+			SPRD_DRM_DEBUG("SPRD_FB_SET_OVERLAY(%d) rect:%dx%d+%d+%d size:%dx%d\n", ovi.layer_index, w, h, x, y, ovi.size.hsize, ovi.size.vsize);
+			if (ioctl(conn->fb_fd, SPRD_FB_SET_OVERLAY, &ovi) == -1) {
+				SPRD_DRM_ERROR( "error:%s Unable to set overlay: SPRD_FB_SET_OVERLAY\n",
+						strerror (errno));
+				return -EACCES;
+			}
 		}
 
 		//commit last setting immediately
