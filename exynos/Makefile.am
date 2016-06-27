@@ -3,13 +3,12 @@ AM_CFLAGS = \
 	$(VISIBILITY_CFLAGS) \
 	-I$(top_srcdir) \
 	-I$(top_srcdir)/exynos \
-	$(PTHREADSTUBS_CFLAGS) \
 	-I$(top_srcdir)/include/drm
 
 libdrm_exynos_la_LTLIBRARIES = libdrm_exynos.la
 libdrm_exynos_ladir = $(libdir)
 libdrm_exynos_la_LDFLAGS = -version-number 1:0:0 -no-undefined
-libdrm_exynos_la_LIBADD = ../libdrm.la @PTHREADSTUBS_LIBS@
+libdrm_exynos_la_LIBADD = ../libdrm.la
 
 libdrm_exynos_la_SOURCES = \
 	exynos_drm.c \

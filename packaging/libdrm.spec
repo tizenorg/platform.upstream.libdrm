@@ -9,7 +9,6 @@ Source0:        %{name}-%{version}.tar.bz2
 Source1001:		%name.manifest
 
 BuildRequires:  pkgconfig(pciaccess)
-BuildRequires:  pkgconfig(pthread-stubs)
 %if ("%{?tizen_target_name}" == "TM1")
 BuildRequires:  kernel-headers-tizen-dev
 BuildConflicts:  linux-glibc-devel

@@ -29,13 +29,12 @@ AM_CFLAGS = \
 	$(VISIBILITY_CFLAGS) \
 	-I$(top_srcdir) \
 	-I$(top_srcdir)/radeon \
-	$(PTHREADSTUBS_CFLAGS) \
 	-I$(top_srcdir)/include/drm
 
 libdrm_radeon_la_LTLIBRARIES = libdrm_radeon.la
 libdrm_radeon_ladir = $(libdir)
 libdrm_radeon_la_LDFLAGS = -version-number 1:0:1 -no-undefined
-libdrm_radeon_la_LIBADD = ../libdrm.la @PTHREADSTUBS_LIBS@
+libdrm_radeon_la_LIBADD = ../libdrm.la
 
 libdrm_radeon_la_SOURCES = $(LIBDRM_RADEON_FILES)
 
