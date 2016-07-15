@@ -130,3 +130,53 @@ int util_write_bmp(const char *file, const void *data, unsigned int width,
 	fclose(fp);
 	return 0;
 }
+
+void util_draw_buffer_yuv(void **addr, unsigned int width, unsigned int height)
+{
+	int i, j;
+	void *img_ptr;
+	unsigned char *in_img;
+	unsigned char *y, *u, *v, *u422, *v422;
+
+	img_ptr = malloc(width * height * 4);
+	y = malloc(width * height);
+	u = malloc(width * height);
+	v = malloc(width * height);
+
+	u422 = malloc(width * (height / 2));
+	v422 = malloc(width * (height / 2));
+
+	/* Get RGB fmt Image */
+	util_draw_buffer(img_ptr, 1, width, height, width * 4, 0);
+
+	i = 0;
+	in_img = (unsigned char *)img_ptr;
+
+	/* RGB to YCbCr Conversion  */
+	for (j = 0; j<width * height * 4; j += 4) {
+		y[j / 4] = (unsigned char)(62.481 / 255 *
+			in_img[width * height * 4 - j - 1] + 128.553 / 255 *
+			in_img[width * height * 4 - j - 2] + 24.966 / 255 *
+			in_img[width * height * 4 - j - 3]);
+		u[j / 4] = (unsigned char)(-37.797 / 255 *
+			in_img[width * height * 4 - j - 1] - 74.203 / 255 *
+			in_img[width * height * 4 - j - 2] + 112.000 / 255 *
+			in_img[width * height * 4 - j - 3]) + 128;
+		v[j / 4] = (unsigned char)(112.000 / 255 *
+			in_img[width * height * 4 - j - 1] - 93.786 / 255 *
+			in_img[width * height * 4 - j - 2] - 18.214 / 255 *
+			in_img[width * height * 4 - j - 3]) + 128;
+
+		if ((j / 4) % 2 == 0) {
+			u422[i] = u[j / 4];
+			v422[i] = v[j / 4];
+			i++;
+		}
+	}
+
+	memcpy(addr[EXYNOS_DRM_PLANAR_Y], y, width * height);
+	memcpy(addr[EXYNOS_DRM_PLANAR_CB], u422, width * (height / 2));
+	memcpy(addr[EXYNOS_DRM_PLANAR_CR], v422, width * (height / 2));
+
+	free(img_ptr); free(y); free(u); free(v); free(u422); free(v422);
+}
