@@ -37,6 +37,378 @@
 #include "util.h"
 
 #include "drm_fourcc.h"
+#include "drm_mode.h"
+#include "libkms.h"
+#include "internal.h"
+
+void free_resources(struct resources *res)
+{
+	if (!res)
+		return;
+
+#define free_resource(_res, __res, type, Type)					\
+	do {									\
+		int i;								\
+		if (!(_res)->type##s)						\
+			break;							\
+		for (i = 0; i < (int)(_res)->__res->count_##type##s; ++i) {	\
+			if (!(_res)->type##s[i].type)				\
+				break;						\
+			drmModeFree##Type((_res)->type##s[i].type);		\
+		}								\
+		free((_res)->type##s);						\
+	} while (0)
+
+#define free_properties(_res, __res, type)					\
+	do {									\
+		int i;								\
+		for (i = 0; i < (int)(_res)->__res->count_##type##s; ++i) {	\
+			drmModeFreeObjectProperties(res->type##s[i].props);	\
+			free(res->type##s[i].props_info);			\
+		}								\
+	} while (0)
+
+	if (res->res) {
+		free_properties(res, res, crtc);
+
+		free_resource(res, res, crtc, Crtc);
+		free_resource(res, res, encoder, Encoder);
+		free_resource(res, res, connector, Connector);
+		free_resource(res, res, fb, FB);
+
+		drmModeFreeResources(res->res);
+	}
+
+	if (res->plane_res) {
+		free_properties(res, plane_res, plane);
+
+		free_resource(res, plane_res, plane, Plane);
+
+		drmModeFreePlaneResources(res->plane_res);
+	}
+
+	free(res);
+}
+
+struct resources *get_resources(struct device *dev)
+{
+	struct resources *res;
+	int i;
+
+	res = malloc(sizeof *res);
+	if (res == 0)
+		return NULL;
+
+	memset(res, 0, sizeof *res);
+
+	res->res = drmModeGetResources(dev->fd);
+	if (!res->res) {
+		fprintf(stderr, "drmModeGetResources failed: %s\n",
+			strerror(errno));
+		goto error;
+	}
+
+	res->crtcs = malloc(res->res->count_crtcs * sizeof *res->crtcs);
+	res->encoders = malloc(res->res->count_encoders * sizeof *res->encoders);
+	res->connectors = malloc(res->res->count_connectors * sizeof *res->connectors);
+	res->fbs = malloc(res->res->count_fbs * sizeof *res->fbs);
+
+	if (!res->crtcs || !res->encoders || !res->connectors || !res->fbs)
+		goto error;
+
+	memset(res->crtcs , 0, res->res->count_crtcs * sizeof *res->crtcs);
+	memset(res->encoders, 0, res->res->count_encoders * sizeof *res->encoders);
+	memset(res->connectors, 0, res->res->count_connectors * sizeof *res->connectors);
+	memset(res->fbs, 0, res->res->count_fbs * sizeof *res->fbs);
+
+#define get_resource(_res, __res, type, Type)					\
+	do {									\
+		int i;								\
+		for (i = 0; i < (int)(_res)->__res->count_##type##s; ++i) {	\
+			(_res)->type##s[i].type =				\
+				drmModeGet##Type(dev->fd, (_res)->__res->type##s[i]); \
+			if (!(_res)->type##s[i].type)				\
+				fprintf(stderr, "could not get %s %i: %s\n",	\
+					#type, (_res)->__res->type##s[i],	\
+					strerror(errno));			\
+		}								\
+	} while (0)
+
+	get_resource(res, res, crtc, Crtc);
+	get_resource(res, res, encoder, Encoder);
+	get_resource(res, res, connector, Connector);
+	get_resource(res, res, fb, FB);
+
+#define get_properties(_res, __res, type, Type)					\
+	do {									\
+		int i;								\
+		for (i = 0; i < (int)(_res)->__res->count_##type##s; ++i) {	\
+			struct type *obj = &res->type##s[i];			\
+			unsigned int j;						\
+			obj->props =						\
+				drmModeObjectGetProperties(dev->fd, obj->type->type##_id, \
+							   DRM_MODE_OBJECT_##Type); \
+			if (!obj->props) {					\
+				fprintf(stderr,					\
+					"could not get %s %i properties: %s\n", \
+					#type, obj->type->type##_id,		\
+					strerror(errno));			\
+				continue;					\
+			}							\
+			obj->props_info = malloc(obj->props->count_props *	\
+						 sizeof *obj->props_info);	\
+			if (!obj->props_info)					\
+				continue;					\
+			for (j = 0; j < obj->props->count_props; ++j)		\
+				obj->props_info[j] =				\
+					drmModeGetProperty(dev->fd, obj->props->props[j]); \
+		}								\
+	} while (0)
+
+	get_properties(res, res, crtc, CRTC);
+
+	/**
+	 * This code is needed because drm_connector function.
+	 * It's replace below code.
+	 * get_properties(res, res, drm_connector, CONNECTOR);
+	 */
+	for (i = 0; i < (int)res->res->count_connectors; ++i) {
+		struct drm_connector *obj = &res->connectors[i];
+		unsigned int j;
+		obj->props = drmModeObjectGetProperties(dev->fd,
+				obj->connector->connector_id,
+				DRM_MODE_OBJECT_CONNECTOR);
+
+		if (!obj->props) {
+			fprintf(stderr, "could not get %s %u properties: %s\n",
+				"drm_connector", obj->connector->connector_id,
+				strerror(errno));
+			continue;
+		}
+			printf("could not get %s %u properties: %s\n",
+				"drm_connector", obj->connector->connector_id,
+				strerror(errno));
+
+		obj->props_info = malloc(obj->props->count_props *
+					sizeof(*obj->props_info));
+		if (!obj->props_info)
+			continue;
+
+		for (j = 0; j < obj->props->count_props; ++j)
+			obj->props_info[j] =
+			drmModeGetProperty(dev->fd, obj->props->props[j]);
+	}
+
+	for (i = 0; i < res->res->count_crtcs; ++i)
+		res->crtcs[i].mode = &res->crtcs[i].crtc->mode;
+
+	res->plane_res = drmModeGetPlaneResources(dev->fd);
+	if (!res->plane_res) {
+		fprintf(stderr, "drmModeGetPlaneResources failed: %s\n",
+			strerror(errno));
+		return res;
+	}
+
+	res->planes = malloc(res->plane_res->count_planes * sizeof *res->planes);
+	if (!res->planes)
+		goto error;
+
+	memset(res->planes, 0, res->plane_res->count_planes * sizeof *res->planes);
+
+	get_resource(res, plane_res, plane, Plane);
+	get_properties(res, plane_res, plane, PLANE);
+
+	return res;
+
+error:
+	free_resources(res);
+	return NULL;
+}
+
+static int get_crtc_index(struct device *dev, uint32_t id)
+{
+	int i;
+
+	for (i = 0; i < dev->resources->res->count_crtcs; ++i) {
+		drmModeCrtc *crtc = dev->resources->crtcs[i].crtc;
+		if (crtc && crtc->crtc_id == id)
+			return i;
+	}
+
+	return -1;
+}
+
+static drmModeConnector *get_connector_by_id(struct device *dev, uint32_t id)
+{
+	drmModeConnector *connector;
+	int i;
+
+	for (i = 0; i < dev->resources->res->count_connectors; i++) {
+		connector = dev->resources->connectors[i].connector;
+		if (connector && connector->connector_id == id)
+			return connector;
+	}
+
+	return NULL;
+}
+
+static drmModeEncoder *get_encoder_by_id(struct device *dev, uint32_t id)
+{
+	drmModeEncoder *encoder;
+	int i;
+
+	for (i = 0; i < dev->resources->res->count_encoders; i++) {
+		encoder = dev->resources->encoders[i].encoder;
+		if (encoder && encoder->encoder_id == id)
+			return encoder;
+	}
+
+	return NULL;
+}
+
+static drmModeModeInfo *
+connector_find_mode_output(struct device *dev, uint32_t con_id,
+			const char *mode_str, const unsigned int vrefresh)
+{
+	drmModeConnector *connector;
+	drmModeModeInfo *mode;
+	int i;
+
+	connector = get_connector_by_id(dev, con_id);
+	if (!connector || !connector->count_modes)
+		return NULL;
+
+	for (i = 0; i < connector->count_modes; i++) {
+		mode = &connector->modes[i];
+		if (!strcmp(mode->name, mode_str)) {
+			/* If the vertical refresh frequency is not specified
+			 * then return the first mode that match with the name.
+			 * Else, return the mode that match the name and
+			 * the specified vertical refresh frequency.
+			 */
+			if (vrefresh == 0)
+				return mode;
+			else if (mode->vrefresh == vrefresh)
+				return mode;
+		}
+	}
+
+	return NULL;
+}
+
+struct crtc *pipe_find_crtc(struct device *dev, struct pipe_arg *pipe)
+{
+	uint32_t possible_crtcs = ~0;
+	uint32_t active_crtcs = 0;
+	unsigned int crtc_idx;
+	unsigned int i;
+	int j;
+
+	for (i = 0; i < pipe->num_cons; ++i) {
+		uint32_t crtcs_for_connector = 0;
+		drmModeConnector *connector;
+		drmModeEncoder *encoder;
+		int idx;
+
+		connector = get_connector_by_id(dev, pipe->con_ids[i]);
+		if (!connector)
+			return NULL;
+
+		for (j = 0; j < connector->count_encoders; ++j) {
+			encoder = get_encoder_by_id(dev, connector->encoders[j]);
+			if (!encoder)
+				continue;
+
+			crtcs_for_connector |= encoder->possible_crtcs;
+
+			idx = get_crtc_index(dev, encoder->crtc_id);
+			if (idx >= 0)
+				active_crtcs |= 1 << idx;
+		}
+
+		possible_crtcs &= crtcs_for_connector;
+	}
+
+	if (!possible_crtcs)
+		return NULL;
+
+	/* Return the first possible and active CRTC if one exists, or the first
+	 * possible CRTC otherwise.
+	 */
+	if (possible_crtcs & active_crtcs)
+		crtc_idx = ffs(possible_crtcs & active_crtcs);
+	else
+		crtc_idx = ffs(possible_crtcs);
+
+	return &dev->resources->crtcs[crtc_idx - 1];
+}
+
+static int pipe_find_crtc_and_mode(struct device *dev, struct pipe_arg *pipe,
+							struct connector *c)
+{
+	drmModeModeInfo *mode = NULL;
+	int i;
+
+	/* init pipe_arg and parse connector by khg */
+	pipe->vrefresh = 0;
+	pipe->crtc_id = (uint32_t)-1;
+	strcpy(pipe->format_str, "XR24");
+
+	/* Count the number of connectors and allocate them. */
+	pipe->num_cons = 1;
+	pipe->con_ids = malloc(pipe->num_cons * sizeof(*pipe->con_ids));
+	if (!pipe->con_ids)
+		return -1;
+
+	pipe->con_ids[0] = c->id;
+	pipe->crtc_id = c->crtc;
+
+	strcpy(pipe->mode_str, c->mode_str);
+	pipe->fourcc = format_fourcc(pipe->format_str);
+	if (!pipe->fourcc) {
+		fprintf(stderr, "unknown format %s\n", pipe->format_str);
+		return -1;
+	}
+
+	pipe->mode = NULL;
+
+	for (i = 0; i < (int)pipe->num_cons; i++) {
+		mode = connector_find_mode_output(dev, pipe->con_ids[i],
+					   pipe->mode_str, pipe->vrefresh);
+		if (mode == NULL) {
+			fprintf(stderr,
+				"failed to find mode \"%s\" for connector %u\n",
+				pipe->mode_str, pipe->con_ids[i]);
+			return -EINVAL;
+		}
+	}
+
+	/* If the CRTC ID was specified, get the corresponding CRTC. Otherwise
+	 * locate a CRTC that can be attached to all the connectors.
+	 */
+	if (pipe->crtc_id != (uint32_t)-1) {
+		for (i = 0; i < dev->resources->res->count_crtcs; i++) {
+			struct crtc *crtc = &dev->resources->crtcs[i];
+
+			if (pipe->crtc_id == crtc->crtc->crtc_id) {
+				pipe->crtc = crtc;
+				break;
+			}
+		}
+	} else {
+		pipe->crtc = pipe_find_crtc(dev, pipe);
+	}
+
+	if (!pipe->crtc) {
+		fprintf(stderr, "failed to find CRTC for pipe\n");
+		return -EINVAL;
+	}
+
+	pipe->mode = mode;
+	pipe->crtc->mode = mode;
+
+	return 0;
+}
 
 static int exynos_drm_ipp_set_property(int fd,
 				struct drm_exynos_ipp_property *property,
@@ -108,6 +480,29 @@ static int exynos_drm_ipp_set_property(int fd,
 		property->range = COLOR_RANGE_FULL;	/* Wide default */
 		break;
 	case IPP_CMD_OUTPUT:
+		property->cmd = IPP_CMD_M2M;
+		property->config[EXYNOS_DRM_OPS_SRC].ops_id = EXYNOS_DRM_OPS_SRC;
+		property->config[EXYNOS_DRM_OPS_SRC].flip = EXYNOS_DRM_FLIP_NONE;
+		property->config[EXYNOS_DRM_OPS_SRC].degree = EXYNOS_DRM_DEGREE_0;
+		property->config[EXYNOS_DRM_OPS_SRC].fmt = DRM_FORMAT_YUV422;
+		property->config[EXYNOS_DRM_OPS_SRC].pos = crop_pos;
+		property->config[EXYNOS_DRM_OPS_SRC].sz = src_sz;
+
+		property->config[EXYNOS_DRM_OPS_DST].ops_id = EXYNOS_DRM_OPS_DST;
+		property->config[EXYNOS_DRM_OPS_DST].flip = EXYNOS_DRM_FLIP_NONE;
+		property->config[EXYNOS_DRM_OPS_DST].degree = degree;
+		property->config[EXYNOS_DRM_OPS_DST].fmt = DRM_FORMAT_XRGB8888;
+		if (property->config[EXYNOS_DRM_OPS_DST].degree == EXYNOS_DRM_DEGREE_90) {
+			dst_sz.hsize = def_sz->vsize;
+			dst_sz.vsize = def_sz->hsize;
+
+			scale_pos.w = def_sz->vsize;
+			scale_pos.h = def_sz->hsize;
+		}
+		property->config[EXYNOS_DRM_OPS_DST].pos = scale_pos;
+		property->config[EXYNOS_DRM_OPS_DST].sz = dst_sz;
+		property->range = COLOR_RANGE_FULL;	/* Wide default */
+		break;
 	default:
 		ret = -EINVAL;
 		return ret;
@@ -150,7 +545,38 @@ static int exynos_drm_ipp_queue_buf(int fd, struct drm_exynos_ipp_queue_buf *qbu
 		fprintf(stderr,
 		"failed to DRM_IOCTL_EXYNOS_IPP_QUEUE_BUF[id:%d][buf_type:%d] : %s\n",
 		ops_id, buf_type, strerror(errno));
- 
+
+	return ret;
+}
+
+static int exynos_drm_ipp_queue_buf_output(int fd, struct drm_exynos_ipp_queue_buf *qbuf,
+					enum drm_exynos_ops_id ops_id,
+					enum drm_exynos_ipp_buf_type buf_type,
+					int prop_id,
+					int buf_id,
+					unsigned int gem_handle_y,
+					unsigned int gem_handle_u,
+					unsigned int gem_handle_v)
+{
+	int ret = 0;
+
+	memset(qbuf, 0x00, sizeof(struct drm_exynos_ipp_queue_buf));
+
+	qbuf->ops_id = ops_id;
+	qbuf->buf_type = buf_type;
+	qbuf->user_data = 0;
+	qbuf->prop_id = prop_id;
+	qbuf->buf_id = buf_id;
+	qbuf->handle[EXYNOS_DRM_PLANAR_Y] = gem_handle_y;
+	qbuf->handle[EXYNOS_DRM_PLANAR_CB] = gem_handle_u;
+	qbuf->handle[EXYNOS_DRM_PLANAR_CR] = gem_handle_v;
+
+	ret = ioctl(fd, DRM_IOCTL_EXYNOS_IPP_QUEUE_BUF, qbuf);
+	if (ret)
+		fprintf(stderr,
+		"failed to DRM_IOCTL_EXYNOS_IPP_QUEUE_BUF[id:%d][buf_type:%d] : %s\n",
+		ops_id, buf_type, strerror(errno));
+
 	return ret;
 }
 
@@ -587,9 +1013,183 @@ err_ipp_ctrl_close:
 	return;
 }
 
-void fimc_output_set_mode(struct connector *c, int count, int page_flip,
-								long int *usec)
+void fimc_output_set_mode(struct device *dev, struct connector *c, int count,
+						enum drm_exynos_degree degree)
 {
-	fprintf(stderr, "not supported. please wait v2\n");
-}
+	struct drm_exynos_ipp_property property;
+	struct drm_exynos_ipp_cmd_ctrl cmd_ctrl;
+	struct drm_exynos_sz def_sz;
+	struct drm_exynos_ipp_queue_buf qbuf1, qbuf2;
+	struct drm_exynos_gem_create gem1[MAX_BUF], gem2;
+	struct exynos_gem_mmap_data mmap1[MAX_BUF], mmap2;
+	void *usr_addr1[MAX_BUF], *usr_addr2;
+	struct drm_gem_close args;
+	uint32_t handles[4], pitches[4], offsets[4] = {0};
+	unsigned int fb_id_dst;
+	struct kms_bo *bo_dst;
+	struct pipe_arg pipe;
+	int ret, i;
 
+	dev->mode.width = 0;
+	dev->mode.height = 0;
+
+	/* For crtc and mode */
+	for (i = 0; i < count; i++) {
+		ret = pipe_find_crtc_and_mode(dev, &pipe, &c[i]);
+		if (ret < 0)
+			continue;
+
+		dev->mode.width += pipe.mode->hdisplay;
+		if (dev->mode.height < pipe.mode->vdisplay)
+			dev->mode.height = pipe.mode->vdisplay;
+	}
+
+	/* For source buffer */
+	for (i = 0; i < MAX_BUF; i++) {
+		ret = util_gem_create_mmap(dev->fd, &gem1[i], &mmap1[i],
+					dev->mode.width * dev->mode.height * 4);
+		if (ret) {
+			fprintf(stderr, "failed to gem create mmap: %s\n",
+							strerror(errno));
+			goto err_ipp_src_buff_close;
+		}
+
+		usr_addr1[i] = mmap1[i].addr;
+	}
+	util_draw_buffer_yuv(usr_addr1, dev->mode.width, dev->mode.height);
+
+	/*For destination buffer */
+	bo_dst = create_test_buffer(dev->kms, pipe.fourcc,
+			dev->mode.width, dev->mode.height,
+			handles, pitches, offsets);
+	if (bo_dst == NULL)
+		goto err_ipp_src_buff_close;
+
+	mmap2.size = gem2.size = bo_dst->size;
+	mmap2.offset = gem2.flags = 0;
+	mmap2.handle = gem2.handle = bo_dst->handle;
+	mmap2.addr = bo_dst->ptr;
+
+	usr_addr2 = mmap2.addr;
+
+	/* Add fb2 dst */
+	ret = drmModeAddFB2(dev->fd, dev->mode.width, dev->mode.height,
+			pipe.fourcc, handles, pitches,
+			offsets, &fb_id_dst, 0);
+	if (ret) {
+		fprintf(stderr, "failed to add fb (%ux%u):%s\n",
+				dev->mode.width, dev->mode.height,
+				strerror(errno));
+		goto err_ipp_dst_buff_close;
+	}
+
+	def_sz.hsize = dev->mode.width;
+	def_sz.vsize = dev->mode.height;
+
+	i = 0;
+	while (i  < 3) {
+		/* For property */
+		switch (i) {
+		case 0:
+			ret = exynos_drm_ipp_set_property(dev->fd, &property,
+				&def_sz, IPP_CMD_OUTPUT, EXYNOS_DRM_DEGREE_0);
+			break;
+		case 1:
+			ret = exynos_drm_ipp_set_property(dev->fd, &property,
+				&def_sz, IPP_CMD_OUTPUT, degree);
+			getchar();
+			break;
+		case 2:
+			ret = exynos_drm_ipp_set_property(dev->fd, &property,
+				&def_sz, IPP_CMD_OUTPUT, EXYNOS_DRM_DEGREE_0);
+			getchar();
+			break;
+		}
+
+		if (ret && i == 0) {
+			fprintf(stderr, "failed to ipp property\n");
+			goto err_ipp_dst_buff_close;
+		} else if (ret && i != 0) {
+			fprintf(stderr, "failed to ipp property\n");
+			goto err_ipp_quque_close;
+		}
+
+		/* For source buffer map to IPP */
+		ret = exynos_drm_ipp_queue_buf_output(dev->fd, &qbuf1,
+				EXYNOS_DRM_OPS_SRC, IPP_BUF_ENQUEUE,
+				property.prop_id, 0,
+				gem1[0].handle, gem1[1].handle, gem1[2].handle);
+		if (ret) {
+			fprintf(stderr, "failed to ipp buf src map\n");
+			goto err_ipp_quque_close;
+		}
+
+		/* For destination buffer map to IPP */
+		ret = exynos_drm_ipp_queue_buf_output(dev->fd, &qbuf2,
+				EXYNOS_DRM_OPS_DST, IPP_BUF_ENQUEUE,
+				property.prop_id, 0, gem2.handle, 0, 0);
+		if (ret) {
+			fprintf(stderr, "failed to ipp buf dst map\n");
+			goto err_ipp_quque_close;
+		}
+
+		/* Start */
+		ret = exynos_drm_ipp_cmd_ctrl(dev->fd, &cmd_ctrl,
+				property.prop_id, IPP_CTRL_PLAY);
+		if (ret) {
+			fprintf(stderr,
+				"failed to ipp ctrl IPP_CMD_M2M start\n");
+			goto err_ipp_quque_close;
+		}
+
+		ret = drmModePageFlip(dev->fd, pipe.crtc->crtc->crtc_id,
+				fb_id_dst, DRM_MODE_PAGE_FLIP_EVENT, &pipe);
+		if (ret) {
+			fprintf(stderr, "failed to page flip: %s\n",
+					strerror(errno));
+			goto err_ipp_quque_close;
+		}
+		i++;
+	}
+
+err_ipp_quque_close:
+	for (i = 1; i <= property.prop_id; i++) {
+		/* For destination buffer dequeue to IPP */
+		ret = exynos_drm_ipp_queue_buf_output(dev->fd, &qbuf2,
+				EXYNOS_DRM_OPS_DST, IPP_BUF_DEQUEUE,
+				i, 0, gem2.handle, 0, 0);
+		if (ret < 0)
+			fprintf(stderr, "failed to ipp buf dst dequeue\n");
+
+		/* For source buffer dequeue to IPP */
+		ret = exynos_drm_ipp_queue_buf_output(dev->fd, &qbuf1,
+				EXYNOS_DRM_OPS_SRC, IPP_BUF_DEQUEUE, i, 0,
+				gem1[0].handle, gem1[1].handle, gem1[2].handle);
+		if (ret < 0)
+			fprintf(stderr, "failed to ipp buf dst dequeue\n");
+
+		/* Stop */
+		ret = exynos_drm_ipp_cmd_ctrl(dev->fd, &cmd_ctrl,
+						i, IPP_CTRL_STOP);
+		if (ret)
+			fprintf(stderr,
+				"failed to ipp ctrl IPP_CMD_OUTPUT stop\n");
+	}
+err_ipp_dst_buff_close:
+	/* Close destination buffer */
+	munmap(usr_addr2, mmap2.size);
+	memset(&args, 0x00, sizeof(struct drm_gem_close));
+	args.handle = gem2.handle;
+	exynos_gem_close(dev->fd, &args);
+	kms_bo_destroy(&bo_dst);
+err_ipp_src_buff_close:
+	/* Close source buffer */
+	for (i = 0; i < MAX_BUF; i++) {
+		munmap(usr_addr1[i], mmap1[i].size);
+		memset(&args, 0x00, sizeof(struct drm_gem_close));
+		args.handle = gem1[i].handle;
+		exynos_gem_close(dev->fd, &args);
+	}
+
+	return;
+}
