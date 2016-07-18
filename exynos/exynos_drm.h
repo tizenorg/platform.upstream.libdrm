@@ -312,6 +312,13 @@ enum drm_exynos_ipp_cmd {
 	IPP_CMD_MAX,
 };
 
+/* define of M2M command */
+enum drm_exynos_ipp_cmd_m2m {
+	IPP_CMD_M2M_FILE,
+	IPP_CMD_M2M_DISPLAY,
+	IPP_CMD_M2M_NONE,
+};
+
 /* define of color range */
 enum drm_exynos_color_range {
 	COLOR_RANGE_LIMITED,	/* Narrow: Y(16 to 235), Cb/Cr(16 to 240) */

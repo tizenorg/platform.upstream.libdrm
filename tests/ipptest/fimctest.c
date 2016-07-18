@@ -339,7 +339,7 @@ void connector_find_mode(struct connector *c)
 
 extern char *optarg;
 extern int optind, opterr, optopt;
-static char optstr[] = "ecpmfo:s:v";
+static char optstr[] = "ecpmfvDo:s:d:";
 
 static void usage(char *name)
 {
@@ -351,6 +351,8 @@ static void usage(char *name)
 	fprintf(stderr, "\t-f\tlist framebuffers\n");
 	fprintf(stderr, "\t-v\ttest vsynced page flipping\n");
 	fprintf(stderr, "\t-o\tlist of operation id : 0: M2M, 1: Writeback, 2: Output\n");
+	fprintf(stderr, "\t-D\ttest M2M Display Mode\n");
+	fprintf(stderr, "\t-d\tlist of degree operation : 0: 0, 1: 90, 2, 180, 3, 270\n");
 	fprintf(stderr, "\t-s <connector_id>:<mode>\tset a mode\n");
 	fprintf(stderr, "\t-s <connector_id>@<crtc_id>:<mode>\tset a mode\n");
 	fprintf(stderr, "\n\tDefault is to dump all info.\n");
@@ -361,14 +363,19 @@ static void usage(char *name)
 
 int main(int argc, char **argv)
 {
+	struct device dev;
 	int c;
 	int operations = 0, encoders = 0, connectors = 0, crtcs = 0, framebuffers = 0;
+	int degree = EXYNOS_DRM_DEGREE_180;
+	int display = IPP_CMD_M2M_FILE;
 	int test_vsync = 0;
 	char *modules[] = {"exynos", "i915", "radeon", "nouveau", "vmwgfx"};
 	char *modeset = NULL;
 	int i, count = 0;
 	struct connector con_args[2];
-	
+
+	memset(&dev, 0, sizeof(dev));
+
 	opterr = 0;
 	while ((c = getopt(argc, argv, optstr)) != -1) {
 		switch (c) {
@@ -407,6 +414,13 @@ int main(int argc, char **argv)
 				usage(argv[0]);
 			count++;
 			break;
+		case 'd':
+			if (optarg)
+				sscanf(optarg, "%d", &degree);
+			break;
+		case 'D':
+			display = 1;
+			break;
 		default:
 			usage(argv[0]);
 			break;
@@ -423,6 +437,7 @@ int main(int argc, char **argv)
 			printf("failed.\n");
 		} else {
 			printf("success.\n");
+			dev.fd = fd;
 			break;
 		}
 	}
@@ -432,13 +447,14 @@ int main(int argc, char **argv)
 		return -1;
 	}
 
-	resources = drmModeGetResources(fd);
-	if (!resources) {
-		fprintf(stderr, "drmModeGetResources failed: %s\n",
-			strerror(errno));
-		drmClose(fd);
+	dev.resources = get_resources(&dev);
+	if (!dev.resources) {
+		fprintf(stderr, "get_resources failed: %s\n",
+							strerror(errno));
+		drmClose(dev.fd);
 		return 1;
 	}
+	resources = dev.resources->res;
 
 	dump_resource(encoders);
 	dump_resource(connectors);
@@ -446,11 +462,28 @@ int main(int argc, char **argv)
 	dump_resource(framebuffers);
 
 	if (count > 0) {
-		long int sum = 0, usec[MAX_LOOP];
+		long int sum = 0, usec[MAX_LOOP] = {0, };
+		int ret;
 
 		switch(operations) {
 		case 0:
-			fimc_m2m_set_mode(con_args, count, test_vsync, usec);
+			if (degree < EXYNOS_DRM_DEGREE_0 ||
+					degree > EXYNOS_DRM_DEGREE_270) {
+				fprintf(stderr, "not support degree\n");
+				break;
+			}
+
+			ret = kms_create(dev.fd, &dev.kms);
+			if (ret) {
+				fprintf(stderr,
+					"failed to create kms driver: %s\n",
+					strerror(-ret));
+				break;
+			}
+
+			fimc_m2m_set_mode(&dev, con_args, count,
+						degree,	display, usec);
+			kms_destroy(&dev.kms);
 			break;
 		case 1:
 			fimc_wb_set_mode(con_args, count, test_vsync, usec);
@@ -462,16 +495,18 @@ int main(int argc, char **argv)
 			break;
 		}
 
-		for (i = 0; i < MAX_LOOP; i++) {
-			printf("[%d] : %d\n", i + 1, usec[i]);
-			sum += usec[i];
+		if (display == IPP_CMD_M2M_FILE) {
+			for (i = 0; i < MAX_LOOP && usec[i] != 0; i++) {
+				printf("[%d] : %d\n", i + 1, usec[i]);
+				sum += usec[i];
+			}
+			printf("fimc : result files are in %s\n", RESULT_PATH);
+			printf("avg : [%d]\n", sum / i);
 		}
-		printf("fimc : result files are in %s\n", RESULT_PATH);
-		printf("avg : [%d]\n", sum / MAX_LOOP);
 		getchar();
 	}
 
-	drmModeFreeResources(resources);
+	free_resources(dev.resources);
 
 	return 0;
 }

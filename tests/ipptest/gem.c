@@ -37,6 +37,7 @@
 #include "libkms.h"
 
 #include "exynos_drm.h"
+#include "internal.h"
 #include "gem.h"
 
 int exynos_gem_create(int fd, struct drm_exynos_gem_create *gem)
@@ -93,4 +94,37 @@ int exynos_gem_close(int fd, struct drm_gem_close *gem_close)
 	if (ret < 0)
 		fprintf(stderr, "failed to close: %s\n", strerror(-ret));
 	return ret;
+}
+
+struct kms_bo* exynos_kms_gem_create(struct kms_driver *kms,
+		unsigned int width, unsigned int height, unsigned int *stride)
+{
+	struct kms_bo *bo;
+	unsigned bo_attribs[] = {
+		KMS_WIDTH,   0,
+		KMS_HEIGHT,  0,
+		KMS_BO_TYPE, KMS_BO_TYPE_SCANOUT_X8R8G8B8,
+		KMS_TERMINATE_PROP_LIST
+	};
+	int ret;
+
+	bo_attribs[1] = width;
+	bo_attribs[3] = height;
+
+	ret = kms_bo_create(kms, bo_attribs, &bo);
+	if (ret) {
+		fprintf(stderr, "failed to alloc buffer: %s\n",
+			strerror(-ret));
+		return NULL;
+	}
+
+	ret = kms_bo_get_prop(bo, KMS_PITCH, stride);
+	if (ret) {
+		fprintf(stderr, "failed to retreive buffer stride: %s\n",
+			strerror(-ret));
+		kms_bo_destroy(&bo);
+		return NULL;
+	}
+
+	return bo;
 }
