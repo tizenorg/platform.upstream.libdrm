@@ -22,6 +22,10 @@
  * IN THE SOFTWARE.
  */
 
+#ifdef HAVE_CONFIG_H
+#include "config.h"
+#endif
+
 #include <assert.h>
 #include <stdio.h>
 #include <stdlib.h>
